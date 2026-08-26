@@ -4,193 +4,178 @@
 [![CI](https://github.com/ninvfeng/lightmux/actions/workflows/ci.yml/badge.svg)](https://github.com/ninvfeng/lightmux/actions/workflows/ci.yml)
 [![CNB](https://img.shields.io/badge/CNB-lightmux-0052D9.svg)](https://cnb.cool/ninvfeng/lighttools/lightmux)
 
-**A lightweight Android SSH client built for tmux.**
+**一个轻量极致、为 tmux 而生的 Android SSH 客户端。**
 
-[简体中文](./README.zh-CN.md)
+[English](./README.en.md)
 
 ---
 
-- **3.6 MB.** That is the entire APK — no bundled shell, no analytics SDK, no dead weight.
-- **Small, not simple.** Beyond the SSH core: SFTP file management, a host monitor, port forwarding
-  with a built-in preview, and a quick bar you can rebuild key by key.
+- **3.6MB**：这是整包大小——不塞 shell，不带统计 SDK，不夹带用不上的东西。
+- **简约而不简单**：除核心 SSH 外，还有 SFTP 文件管理、主机概览、端口转发与内置预览，
+  以及一条可以按自己习惯重排的快捷栏。
 
-Everyone who actually uses SSH from a phone ends up in tmux: connect → `tmux ls` → `tmux a -t x` → hunt
-for the right window. Other Android SSH clients treat tmux as a feature *inside* the terminal — open a
-terminal, open a panel, pick a session. On a phone that is three navigations per context switch.
+在手机上用 SSH 的人，真实工作流几乎都是 tmux：连上去 → `tmux ls` → `tmux a -t xxx` → 找窗口。
+其他 Android SSH 客户端把 tmux 当成**终端里的一个功能**——先进终端，再开面板，再选会话。
+这在桌面没问题，在手机上是三次导航换一次上下文切换。
 
-lightmux inverts the hierarchy. The home screen lists **host → tmux session → window** directly.
-Expand, tap, you are there. The terminal is the destination, not the entrance.
+lightmux 把这个层级倒过来：主页直接列出 **主机 → tmux 会话 → 窗口**，展开、点击、进去。
+终端是结果，不是入口。
 
-From the home screen to a specific tmux window is **at most 3 taps**, and 1 tap when the host is
-already expanded. Inside a terminal a side swipe pulls out that same tree, so another session is
-one more tap away.
+从主页进到某个 tmux 窗口**最多 3 次点击**，主机已展开时 1 次；
+在终端里侧滑就能拉出同一棵树，切到另一个会话再点一下即可。
 
-## Download
+## 下载
 
-Signed APKs are published on [CNB Releases](https://cnb.cool/ninvfeng/lighttools/lightmux/-/releases).
-Requires Android 7.0 (minSdk 24). Not on any app store — installing means allowing installation from
-an unknown source once.
+签名 APK 发布在 [CNB Releases](https://cnb.cool/ninvfeng/lighttools/lightmux/-/releases)，
+需要 Android 7.0 及以上（minSdk 24）。没有上架任何应用商店，安装时需要放行一次「未知来源」。
 
-The code lives on GitHub and CNB alike; the release pipeline runs only on CNB, so that is where the
-packages are. See [Repositories](#repositories) below.
+代码在 GitHub 与 CNB 各有一份，但发版流水线只跑在 CNB，所以包在那边。见下方[仓库](#仓库)。
 
-## Features
+## 功能
 
-Everything listed here is implemented and shipping.
+以下全部是已实现的内容。
 
-**tmux session switcher (the home screen)**
-- Three-level tree: host → session → window, expanded inline
-- Cache-first rendering: cold start paints the last known tree with a "3 min ago" timestamp and makes
-  **zero** network calls; a host is probed only when you expand it
-- Sessions: attach / create / rename / detach other clients / kill
-- Windows: list and switch
-- Non-tmux ("bare") sessions are listed under their host alongside tmux sessions
-- Every tmux action goes through an out-of-band `exec` channel. lightmux **never injects keystrokes**
-  into your foreground terminal — it may be running a full-screen TUI, or not be attached at all
+**tmux 会话切换器（主页）**
+- 三级树：主机 → 会话 → 窗口，就地展开
+- 缓存优先：冷启动直接渲染上次探测到的树，带「3 分钟前」时间戳，**不发起任何网络请求**；
+  展开某台主机时才去探测它
+- 会话：attach / 新建 / 重命名 / 断开其他客户端 / 结束
+- 窗口：列出与切换
+- 本 app 开的非 tmux「裸会话」与 tmux 会话平级挂在主机下
+- 所有 tmux 动作都走带外 `exec` 侧通道，**绝不向前台终端注入按键**——
+  前台可能是全屏 TUI，也可能压根没 attach
 
-**Terminal**
-- Multiple concurrent sessions, owned by an Application-scoped `SessionManager` so they survive
-  navigation; scrollback is preserved when you leave and come back
-- Foreground service keeps sessions and transfers alive in the background
-- Automatic reconnect with exponential backoff, immediate retry on network recovery, and
-  **scrollback survives the reconnect** (the emulator is kept, only the transport is swapped)
-- After reconnecting it re-attaches to the same tmux session instead of opening a new one
-- Copy / paste, pinch to zoom, scrollback history
-- Quick bar: `⏎` `Esc` `Tab` `Ctrl` `Alt` `↑↓←→` `-` `|` `~` `/` — without `Ctrl` the tmux prefix key
-  is unreachable from an Android soft keyboard, so this is core, not a nicety.
-  `Ctrl` and `Alt` are sticky (tap, then tap the next key) and highlight while armed
-- The bar is yours to arrange: add or drop keys, drag to reorder, resize the caps. One slot holds
-  your own quick commands — tap to send a whole command into the terminal, optionally with Enter
+**终端**
+- 多会话并存，由 Application 作用域的 `SessionManager` 持有，不随导航销毁，来回切页滚屏历史仍在
+- 前台服务保活，切后台后会话与传输继续跑
+- 断线自动重连（指数退避 + 网络恢复立即重试），**重连不丢滚屏**——只换传输，emulator 原样保留
+- 重连后自动 attach 回原来那个 tmux 会话，而不是新开一个
+- 复制 / 粘贴、捏合缩放、滚屏历史
+- 快捷栏：`Esc` `Tab` `Ctrl` `Alt` `↑↓←→` `-` `|` `~` `/`——
+  没有 `Ctrl`，Android 软键盘打不出 tmux 前缀键，所以这属于核心功能而非锦上添花。
+  `Ctrl` / `Alt` 是粘滞修饰键（先点它，再点下一个键），按下期间高亮
+- 快捷栏可自定义：键位增删、拖动排序、键帽大小可调；另有一格「命令」收着自建的快捷命令，
+  点一下把整条命令送进终端（可选自动回车）
 
-**Host management**
-- Name, host, port, user, group; password or private key (PEM) authentication
-- Keys are managed in one place: import once, reuse across hosts, edit it and every host follows
-- Credentials encrypted with the Android Keystore (AES-GCM), never stored in plaintext
-- TOFU host key verification — the key is pinned on first use and a change is a blocking warning
-- ProxyJump (jump host)
-- Command to run after login
+**主机管理**
+- 名称、host、端口、用户、分组；密码 / 私钥（PEM）认证
+- 密钥集中管理：导入一次，多台主机共用一把；改一处，用到它的主机跟着变
+- 凭据经 Android Keystore（AES-GCM）加密存储，不落明文
+- 主机密钥 TOFU 校验：首次连接记录指纹，变更时阻断式告警
+- ProxyJump（跳板机）
+- 登录后自动执行命令
 
-**Host monitor**
-- Distribution / kernel / hostname / uptime / load / CPU (total and per core) / memory / swap /
-  disks / network interfaces / containers / top processes; local and public IP, tap to copy
-- One `exec` per sample, parsed from `/proc` — no dependency on `top` or `free`, whose output varies
-  by distro. Anything that cannot be read is shown as **unavailable** rather than padded with zeros
-- Containers and processes sort by CPU or memory, so whatever is eating the box shows up first
-- Refreshes every 5s while the page is open and stops the instant you leave
-- Linux only; hosts without `/proc/stat` say so instead of showing wrong numbers
+**主机监控**
+- 发行版 / 内核 / 主机名 / 运行时长 / 负载 / CPU（总体 + 每核）/ 内存 / 交换 / 磁盘 / 网卡 /
+  容器 / 进程排行；本地与公网 IP 可点击复制
+- 一次 `exec` 采全量，以直读 `/proc` 为主——不依赖 `top`、`free` 这类输出因发行版而异的工具；
+  采不到的项如实标「不可用」，**不拿 0 充数**
+- 容器与进程可按 CPU 或内存倒序，一眼看出谁在吃资源
+- 停留在页面时每 5 秒刷新，离开立即停
+- 目前只支持 Linux，没有 `/proc/stat` 的主机直说「暂不支持」，不给错数字
 
-**Files (SFTP)**
-- Browse / upload / download / mkdir / rename / delete, over the same SSH connection
-- Small text files can be edited and saved in-app (binary files and oversized files are refused)
-- Transfers run on an Application-level background queue with visible, cancellable progress
+**文件管理（SFTP）**
+- 复用同一条 SSH 连接：浏览 / 上传 / 下载 / 新建目录 / 重命名 / 删除
+- 小文本文件可在 app 内编辑保存（二进制与超大文件会被拒绝）
+- 传输走 Application 级后台队列，进度可见、可取消
 
-**Port forwarding**
-- The equivalent of `ssh -L`: something serving on the host's port 3000 opens as
-  `http://127.0.0.1:3000` in the phone's browser
-- Opening the forwarding screen lists what the host is listening on (`ss -tlnp`); loopback-only
-  ports sort first, since those are the ones that genuinely need a tunnel. The search box filters
-  the list you already have, by port number, process name or listen address
-- **Bound to loopback only** — a forwarded port is reachable from this phone and nothing else,
-  so joining a café Wi-Fi never quietly exposes the host's internal services
-- When an address like `http://127.0.0.1:3000` scrolls past in the terminal, a bar offers to forward
-  and open it right there — the moment a service comes up is exactly when you want to look at it
-- Reconnects with backoff on drops; live forwards keep the foreground service alive
-- Forwarded pages open **inside the app**, in a minimal built-in browser: leaving for an external
-  browser is exactly when the phone's battery policy cuts this app off the network, so the tunnel
-  drops mid-page. Editable address bar (type just `3000` for `127.0.0.1:3000`), back key goes back,
-  and a 44dp bottom bar instead of a title bar, so the page gets the screen; "Open in browser" is
-  still one tap away in that bar's overflow menu
+**端口转发**
+- 等价于 `ssh -L`：服务器上跑在 3000 端口的东西，手机浏览器里直接开 `http://127.0.0.1:3000`
+- 打开转发就列出远端在监听哪些端口（`ss -tlnp`），只绑 `127.0.0.1` 的排在最前——那些正是非转发不可的；
+  端口太多就用搜索框按端口号 / 进程名就地过滤
+- **只绑环回口**：转发出来的端口只有这台手机连得上，不会顺手把内网服务摊给同一个 Wi-Fi
+- 终端输出里出现 `http://127.0.0.1:3000` 这类地址时，底部弹一条提示，点一下就转发并打开——
+  服务刚起来那一刻正是要开它的时候，不用再跑一趟转发页
+- 断线自己退避重连，活着的转发会让前台服务继续保活
+- 转发出来的页面**在 app 内打开**（内置迷你浏览器）：切去外部浏览器的那一下，
+  恰恰是省电策略掐掉本应用后台联网的时机，隧道会当着面断掉。
+  地址栏可改（只打 `3000` 就是 `127.0.0.1:3000`），返回键即后退，
+  操作栏在底部且只有 44dp 高，屏幕尽量让给网页，「用外部浏览器打开」收在这条栏的「⋮」里
 
-**In-app updates**
-- Checks CNB Releases on demand, where the signed APKs are published — there is **no background polling**.
-  The update source points at CNB rather than GitHub because that is where the pipeline signs and
-  publishes; pointing it elsewhere would mean "where is the code, where is the package" has two
-  answers, and one of them eventually goes stale
-- The downloaded APK is verified (package name, version is actually newer, signature matches the
-  installed app) before the system installer is invoked; anything that fails verification is deleted
+**应用内更新**
+- 手动查 CNB Releases（发布包就挂在那儿），**没有后台轮询**。
+  更新源认 CNB 而不是 GitHub，是因为签名出包的流水线在那边；指向别处等于
+  「代码在哪、包在哪」有两个答案，而其中一个迟早会忘记同步
+- 下载后校验包名、版本确实更新、签名与已安装应用一致，通过才拉起系统安装器；
+  任何一项不过就删掉下载的文件
 
-**Basics**
-- English and 简体中文, following the system locale, switchable in Settings
-- Light / dark / follow-system theme
-- 3 terminal palettes: Default (xterm), Solarized Dark, Gruvbox Dark; adjustable terminal font size
-- JetBrains Mono Regular (OFL 1.1) is bundled as the terminal typeface — the system monospace font
-  has no box-drawing glyphs, so TUI borders fall back to another font and come out stretched.
-  CJK still falls back to the system font
-- If the system restricts background networking, Settings says so and takes you straight to the toggle
+**基础**
+- 中英双语，跟随系统，设置内可切
+- 亮色 / 暗色 / 跟随系统主题
+- 3 套终端配色：默认（xterm）、Solarized Dark、Gruvbox Dark；终端字号可调
+- 内置 JetBrains Mono Regular（OFL 1.1）作终端字体——系统等宽字体不含制表符，
+  TUI 框线会跨字体回退后被拉变形；CJK 仍走系统回退
+- 后台联网被系统限制时会在设置页直说，并给一键跳转去放行
 
-## Not doing
+## 不做的事
 
-- **mosh.** It is GPLv3, which would put a permanent source-distribution obligation on every APK of an
-  otherwise MIT project. The `TerminalTransport` interface leaves room for it; if it ever happens it
-  will be an optional separate download, not part of the main APK.
-- Local terminal / bundled shell (that is termux's job), a font download center, cloud sync, desktop.
+- **mosh**。它是 GPLv3，分发含它的 APK 就得一直随附源码，对一个 MIT 项目是持续负担。
+  `TerminalTransport` 留了扩展位，但真要做也会是**独立可选下载**，不进主 APK。
+- 本地终端 / 内置 shell（那是 termux 的地盘）、字体下载中心、云同步 / 账号体系、桌面端。
 
-## Roadmap
+## 路线图
 
-**Not implemented yet:**
+以下**尚未实现**：
 
-Parameterised quick commands · command history · input gestures (drag-to-move-cursor, two-finger
-session switch) · app lock (biometric) · in-app key generation + `ssh-copy-id` · `ssh_config` import ·
-encrypted backup and restore · importing a local font file · more palettes.
+参数化快捷命令 · 命令历史 · 输入手势（空格拖光标 / 双指切会话）· 应用锁（生物识别）·
+应用内生成密钥 + `ssh-copy-id` · `ssh_config` 导入 · 加密备份恢复 · 导入本地字体 · 更多配色。
 
-## Screenshots
+## 截图
 
-Not published yet — they will be added here once the app has been shot on a real device.
+还没有——本机没有真机，等在真机上截好再补到这一节。
 
-## Build
+## 构建
 
-Requires **JDK 17** and an Android SDK with platform 35.
+需要 **JDK 17** 与包含 platform 35 的 Android SDK。
 
 ```bash
-./gradlew assembleDebug                    # app/build/outputs/apk/debug/app-debug.apk
-./gradlew test                             # all unit tests
-./gradlew :app:testDebugUnitTest           # app logic tests (393)
-./gradlew :terminal-emulator:testDebugUnitTest   # upstream emulator tests (138)
-python3 scripts/check_strings.py           # bilingual string resource check
+./gradlew assembleDebug                    # 产物 app/build/outputs/apk/debug/app-debug.apk
+./gradlew test                             # 全部单测
+./gradlew :app:testDebugUnitTest           # app 纯逻辑单测（393 个）
+./gradlew :terminal-emulator:testDebugUnitTest   # 上游 emulator 单测（138 个）
+python3 scripts/check_strings.py           # 双语文案校验
 ```
 
-minSdk 24 (Android 7.0), targetSdk 35, Kotlin 2.1 + Jetpack Compose + Material 3, AGP 8.7.
+minSdk 24（Android 7.0），targetSdk 35，Kotlin 2.1 + Jetpack Compose + Material 3，AGP 8.7。
 
-### Release signing
+### 发布签名
 
-`assembleRelease` picks up the keystore from environment variables:
+`assembleRelease` 从环境变量读 keystore：
 
-| Variable | Meaning |
+| 变量 | 含义 |
 |---|---|
-| `LIGHTMUX_KEYSTORE` | path to the `.jks` keystore |
-| `LIGHTMUX_KEYSTORE_PASSWORD` | keystore password |
-| `LIGHTMUX_KEY_ALIAS` | key alias |
-| `LIGHTMUX_KEY_PASSWORD` | key password |
+| `LIGHTMUX_KEYSTORE` | `.jks` keystore 路径 |
+| `LIGHTMUX_KEYSTORE_PASSWORD` | keystore 密码 |
+| `LIGHTMUX_KEY_ALIAS` | key 别名 |
+| `LIGHTMUX_KEY_PASSWORD` | key 密码 |
 
-If `LIGHTMUX_KEYSTORE` is unset the release build **falls back to the debug signing key**, so a local
-release build still works — but such an APK cannot be used to upgrade over an official release, since
-the signatures differ.
+没设 `LIGHTMUX_KEYSTORE` 时 release 构建**回退 debug 签名**，本地照样能出包——
+但这样的 APK 签名与正式发布不同，**无法覆盖升级**官方版本。
 
-## License
+## 许可
 
-**MIT** — see [LICENSE](./LICENSE).
+**MIT**，见 [LICENSE](./LICENSE)。
 
-[`terminal-emulator/`](./terminal-emulator/LICENSE) and [`terminal-view/`](./terminal-view/LICENSE) are
-vendored from [termux-app](https://github.com/termux/termux-app) v0.118.0 and stay **Apache-2.0**
-(termux's `LICENSE.md` grants an explicit exception for exactly these two modules). Changes to them are
-marked `[lightmux]` and listed in [NOTICE](./NOTICE). Dependencies are inventoried in
-[THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) — nothing GPL/LGPL/AGPL in the tree.
+[`terminal-emulator/`](./terminal-emulator/LICENSE) 与 [`terminal-view/`](./terminal-view/LICENSE)
+取自 [termux-app](https://github.com/termux/termux-app) v0.118.0，继续以 **Apache-2.0** 分发
+（termux 的 `LICENSE.md` 对这两个模块给出了明确例外）。对它们的改动标注 `[lightmux]` 注释，
+逐条列在 [NOTICE](./NOTICE)。依赖清单见 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)——
+依赖树里没有 GPL / LGPL / AGPL。
 
-## Repositories
+## 仓库
 
-The same code lives in two places, and they are kept in sync:
+同一份代码在两处，保持同步：
 
 | | |
 |---|---|
-| [github.com/ninvfeng/lightmux](https://github.com/ninvfeng/lightmux) | Issues and pull requests go here |
-| [cnb.cool/ninvfeng/lighttools/lightmux](https://cnb.cool/ninvfeng/lighttools/lightmux) | Builds, signs and publishes the release APKs |
+| [github.com/ninvfeng/lightmux](https://github.com/ninvfeng/lightmux) | issue 与 PR 提到这里 |
+| [cnb.cool/ninvfeng/lighttools/lightmux](https://cnb.cool/ninvfeng/lighttools/lightmux) | 构建、签名并发布 release APK |
 
-Version tags are pushed to CNB only — a tag there is what triggers a release build.
+版本 tag 只打在 CNB——那边的 tag 就是发版构建的触发器。
 
-## Contributing
+## 参与贡献
 
-PRs are welcome — read [CONTRIBUTING.md](./CONTRIBUTING.md) first.
-Security issues: see [SECURITY.md](./SECURITY.md), please do not open a public issue for those.
+欢迎 PR，动手前先读 [CONTRIBUTING.md](./CONTRIBUTING.md)。
+安全问题见 [SECURITY.md](./SECURITY.md)，**请不要开公开 issue**。
 
-Product design and the reasoning behind it live in [PRD.md](./PRD.md) (Chinese).
-Release history is in [CHANGELOG.md](./CHANGELOG.md).
+产品设计与取舍理由见 [PRD.md](./PRD.md)，版本历史见 [CHANGELOG.md](./CHANGELOG.md)。
