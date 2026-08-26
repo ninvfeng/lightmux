@@ -1,0 +1,30 @@
+*.iml
+.gradle/
+.kotlin/
+/local.properties
+/.idea/
+.DS_Store
+/build
+*/build/
+/captures
+.externalNativeBuild
+.cxx
+
+# 流水线里 cp 出来的待上传产物
+/dist/
+
+# 发版时由 CHANGELOG 生成的 Release 描述，见 scripts/release_notes.py
+/RELEASE_NOTES.md
+
+# scripts/ 下的检查脚本跑一次就留一堆缓存
+__pycache__/
+*.pyc
+
+# 签名密钥绝不入库
+*.jks
+*.keystore
+*.p12
+keystore.properties
+
+# 内部文档
+/ARCHITECTURE.md

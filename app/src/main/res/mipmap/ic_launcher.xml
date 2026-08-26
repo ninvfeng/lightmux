@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- API 24-25 的回退图标（无 adaptive-icon 支持），把背景画进 vector 自身。
+     图形与 drawable/ic_launcher_foreground.xml 保持一致，改一处记得改另一处 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#101418"
+        android:pathData="M0,0 L108,0 L108,108 L0,108 Z" />
+    <path
+        android:fillColor="#4EC9B0"
+        android:fillAlpha="0.28"
+        android:pathData="M52,31 H74 A3,3 0 0 1 77,34 V56 A3,3 0 0 1 74,59 H52 A3,3 0 0 1 49,56 V34 A3,3 0 0 1 52,31 Z" />
+    <path
+        android:fillColor="#4EC9B0"
+        android:pathData="M34,31 H42 A3,3 0 0 1 45,34 V74 A3,3 0 0 1 42,77 H34 A3,3 0 0 1 31,74 V34 A3,3 0 0 1 34,31 Z" />
+    <path
+        android:fillColor="#4EC9B0"
+        android:pathData="M52,63 H74 A3,3 0 0 1 77,66 V74 A3,3 0 0 1 74,77 H52 A3,3 0 0 1 49,74 V66 A3,3 0 0 1 52,63 Z" />
+</vector>

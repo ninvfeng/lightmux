@@ -1,0 +1,63 @@
+lightmux
+Copyright (c) 2026 ninvfeng
+
+This product includes software developed as part of the Termux project.
+
+------------------------------------------------------------------------------
+terminal-emulator/ and terminal-view/
+------------------------------------------------------------------------------
+
+Source: https://github.com/termux/termux-app (tag v0.118.0)
+License: Apache License, Version 2.0
+
+IMPORTANT: The termux-app repository as a whole is released under GPLv3-only.
+However, its upstream LICENSE.md grants an explicit exception for exactly these
+two modules, which derive from Terminal Emulator for Android and are released
+under the Apache License 2.0:
+
+    "Terminal Emulator for Android code is used which is released under
+     Apache License 2.0. Check `terminal-view` and `terminal-emulator`
+     libraries."
+        -- https://github.com/termux/termux-app/blob/master/LICENSE.md
+
+Only these two Apache-2.0 modules are vendored here. No GPLv3 code from
+termux-app is included in this repository or in the distributed APK.
+
+Original upstream:
+    Terminal Emulator for Android
+    https://github.com/jackpal/Android-Terminal-Emulator
+    Copyright (C) Jack Palevich and contributors
+    Licensed under the Apache License, Version 2.0
+
+Modifications by lightmux (all marked with a `[lightmux]` comment):
+
+  terminal-emulator/
+    - Removed JNI.java and src/main/jni/ (the local PTY C code). lightmux
+      attaches to remote hosts and never forks a local process.
+    - Added TerminalTransport.java: an interface abstracting the byte channel
+      (start / write / updateSize / close) so the emulator core is transport
+      agnostic.
+    - Rewrote TerminalSession.java to drive a TerminalTransport instead of a
+      forkpty()'d process: removed shell path/cwd/args/env, waitpid, SIGKILL
+      and /proc-based cwd lookup; added reconnect(TerminalTransport) which
+      swaps the transport while preserving the emulator and its scrollback.
+    - TerminalSession.java: reconnect() also replaces both IO queues with fresh
+      ByteQueue instances instead of reusing the ones cleanupResources() closed
+      (upstream queues are single-use, since a dead process ends the session for
+      good). Each transport generation captures its own queues, so threads left
+      over from the previous connection stay bound to the old, already-closed
+      queues and terminate on their own.
+    - TerminalSession.java: the transport-closed message now carries its
+      generation, and the main-thread handler re-checks it before tearing the
+      session down, so a close notification from a superseded transport cannot
+      shut down the connection that replaced it.
+    - All other files, including ByteQueue.java, are unmodified from upstream.
+
+  terminal-view/
+    - Unmodified from upstream.
+
+Upstream unit tests under terminal-emulator/src/test/ are kept verbatim and run
+in CI, so any accidental regression in the vendored emulator core is caught.
+
+A copy of the Apache License 2.0 is available in each module directory and at
+http://www.apache.org/licenses/LICENSE-2.0

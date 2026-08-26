@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    应用数据一律不外流。
+
+    `android:allowBackup="false"` 只挡住了云备份；Android 12 起「设备到设备迁移」是另一条通道，
+    默认仍然会把整个数据目录搬到新机上，只有这份规则里的 <device-transfer> 才关得掉。
+
+    两段都排干净的理由是同一个：主机口令与私钥在 DataStore 里是密文，解密密钥躺在
+    AndroidKeyStore（见 Secrets），而那把密钥**不可导出、也不会跟着迁移**。
+    搬过去的密文在新机上永远解不开——既白白多暴露一份凭据密文，
+    用户还会以为迁移成功，直到每台主机都连不上才发现。宁可让他重新录入。
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </device-transfer>
+</data-extraction-rules>

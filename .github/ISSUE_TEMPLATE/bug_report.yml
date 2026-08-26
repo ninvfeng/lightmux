@@ -1,0 +1,57 @@
+name: Bug report · 报告问题
+description: Something behaves wrong · 有功能不对劲
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        中文英文都可以。安全问题请走 [SECURITY.md](https://github.com/ninvfeng/lightmux/blob/main/SECURITY.md)，不要开公开 issue。
+        Either language is fine. For security issues see SECURITY.md — do not file them here.
+
+  - type: input
+    id: version
+    attributes:
+      label: lightmux version · 版本
+      description: 设置页底部 · bottom of the Settings screen
+      placeholder: "0.1.56"
+    validations:
+      required: true
+
+  - type: input
+    id: android
+    attributes:
+      label: Android version and device · 系统版本与机型
+      placeholder: "Android 14 / Pixel 7"
+    validations:
+      required: true
+
+  # SSH / tmux 的问题几乎都跟服务端版本相关，缺了这条必然要回头再问一轮
+  - type: input
+    id: server
+    attributes:
+      label: Server and tmux version · 服务端与 tmux 版本
+      description: "`cat /etc/os-release | head -1` 与 `tmux -V`；与 tmux 无关的问题可留空"
+      placeholder: "Debian 12 / tmux 3.3a"
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce · 复现步骤
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected, and what happened instead · 预期与实际
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshots or logs · 截图或日志
+      description: 有 `adb logcat` 输出最好；贴之前请把主机名、IP、密钥内容抹掉

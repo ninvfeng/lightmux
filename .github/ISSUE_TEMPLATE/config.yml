@@ -1,0 +1,14 @@
+# 不关空白 issue：功能建议、提问都走它，没必要为此再造一个模板。
+blank_issues_enabled: true
+contact_links:
+  - name: Download signed APK · 下载签名 APK
+    url: https://cnb.cool/ninvfeng/lighttools/lightmux/-/releases
+    about: 发布包挂在 CNB Releases，不在 GitHub · Releases live on CNB, not here
+
+  - name: Security issue · 安全问题
+    url: https://github.com/ninvfeng/lightmux/security/advisories/new
+    about: 涉及凭据、主机密钥、转发暴露面的问题请私下报告 · Report privately, not as a public issue
+
+  - name: Before requesting a feature · 提功能建议之前
+    url: https://github.com/ninvfeng/lightmux#not-doing
+    about: 先看 README 的「不做的事」与路线图 · Check "Not doing" and the roadmap first

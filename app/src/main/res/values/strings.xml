@@ -1,0 +1,364 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">lightmux</string>
+
+    <!-- 通用 -->
+    <string name="ok">OK</string>
+    <string name="cancel">Cancel</string>
+    <string name="save">Save</string>
+    <string name="delete">Delete</string>
+    <string name="edit">Edit</string>
+    <string name="close">Close</string>
+    <string name="retry">Retry</string>
+    <string name="refresh">Refresh</string>
+    <string name="settings">Settings</string>
+    <string name="back">Back</string>
+
+    <!-- 主页 -->
+    <string name="hosts_empty">No hosts yet. Tap + to add one.</string>
+    <string name="add_host">Add host</string>
+    <string name="terminal">Terminal</string>
+    <string name="monitor">Monitor</string>
+    <string name="files">Files</string>
+    <string name="new_terminal">New terminal</string>
+    <string name="close_session">Close session</string>
+    <string name="disconnect_all">Disconnect all</string>
+    <plurals name="disconnect_all_message">
+        <item quantity="one">%1$d live session will be closed. tmux sessions keep running on the server.</item>
+        <item quantity="other">%1$d live sessions will be closed. tmux sessions keep running on the server.</item>
+    </plurals>
+    <plurals name="disconnect_all_forwards">
+        <item quantity="one">%1$d port forward will be stopped.</item>
+        <item quantity="other">%1$d port forwards will be stopped.</item>
+    </plurals>
+    <string name="delete_host_title">Delete host?</string>
+    <string name="delete_host_message">%1$s and its saved credentials will be removed.</string>
+
+    <!-- 会话 -->
+    <string name="session_disconnected">Disconnected</string>
+    <string name="connecting">Connecting…</string>
+    <string name="session_reconnecting">Reconnecting · attempt %1$d</string>
+    <string name="session_retry_countdown">Retry in %1$ds</string>
+    <string name="session_retry_now">Retry now</string>
+    <string name="session_give_up">Give up</string>
+
+    <!-- 前台服务通知 -->
+    <string name="notification_channel_sessions">Active sessions</string>
+    <string name="notification_channel_sessions_desc">Keeps SSH sessions, transfers and port forwards running in the background.</string>
+    <plurals name="notification_sessions">
+        <item quantity="one">%1$d session</item>
+        <item quantity="other">%1$d sessions</item>
+    </plurals>
+    <plurals name="notification_transfers">
+        <item quantity="one">%1$d transfer</item>
+        <item quantity="other">%1$d transfers</item>
+    </plurals>
+    <plurals name="notification_forwards">
+        <item quantity="one">%1$d forward</item>
+        <item quantity="other">%1$d forwards</item>
+    </plurals>
+    <string name="notification_disconnect_all">Disconnect all</string>
+
+    <!-- 快捷栏。键帽上的字（Esc / Tab / ↑）是键名不是句子，写死在 QuickKey 里不进这里 -->
+    <string name="quick_commands">Commands</string>
+    <string name="quick_commands_empty">No quick commands yet</string>
+    <string name="quick_command_add">Add command</string>
+    <string name="quick_command_label">Command</string>
+    <string name="quick_bar_manage">Customize bar</string>
+    <string name="quick_bar_add_key">Add keys</string>
+    <string name="quick_bar_reset">Reset</string>
+    <string name="quick_key_custom_add">Add custom key</string>
+    <string name="quick_key_custom_label">Key cap</string>
+    <string name="quick_key_custom_text">Text to send</string>
+    <string name="quick_enter_on_tap">Run on tap (send Enter)</string>
+    <string name="reorder">Drag to reorder</string>
+    <string name="remove">Remove</string>
+
+    <!-- 主机编辑 -->
+    <string name="host_edit_title_new">New host</string>
+    <string name="host_edit_title_edit">Edit host</string>
+    <string name="form_section_basic">Basic</string>
+    <string name="form_section_advanced">Advanced</string>
+    <string name="field_name">Name</string>
+    <string name="field_hostname">Host</string>
+    <string name="field_port">Port</string>
+    <string name="field_username">User</string>
+    <string name="field_auth">Authentication</string>
+    <string name="auth_password">Password</string>
+    <string name="auth_key">Private key</string>
+    <string name="field_key_source">Key source</string>
+    <string name="key_source_paste">Paste below</string>
+    <string name="key_source_missing">Key was deleted</string>
+    <string name="key_source_managed">Edit this key under Settings › SSH keys. Every host using it picks up the change.</string>
+    <string name="key_pick_file">Choose a file…</string>
+    <string name="error_key_file_unreadable">Could not read that file</string>
+    <string name="error_key_file_not_a_key">That file is not a private key</string>
+    <string name="error_key_file_putty">PuTTY .ppk is not supported. Convert it first: puttygen key.ppk -O private-openssh -o key.pem</string>
+    <string name="field_pem">Private key (PEM)</string>
+    <string name="field_passphrase">Key passphrase</string>
+    <string name="field_login_command">Command after login</string>
+    <string name="field_proxy_jump">Jump host</string>
+    <string name="proxy_jump_none">Direct</string>
+    <string name="proxy_jump_missing">Jump host was deleted</string>
+    <string name="proxy_jump_hint">Connects through that host first, like ssh -J. Its credentials and host key are reused.</string>
+    <string name="secret_kept">Saved. Leave blank to keep it.</string>
+    <string name="error_field_required">Required</string>
+    <string name="error_port_invalid">Must be 1–65535</string>
+    <string name="error_secret_required">Enter the credential</string>
+
+    <!-- 连接错误 -->
+    <string name="error_connect_failed">Could not connect to %1$s</string>
+    <string name="error_auth_failed">Authentication failed. Check the username and credentials.</string>
+    <string name="error_host_key_changed">The host key of %1$s has changed!\n\nKnown: %2$s\nNow: %3$s\n\nSomeone may be impersonating this server. Only continue if you know why the key changed.</string>
+    <string name="error_host_key_trust_new">Trust the new key</string>
+    <string name="error_auth_agent_unsupported">ssh-agent authentication is not supported yet</string>
+    <string name="error_proxy_jump">Jump host %1$s: %2$s</string>
+    <string name="error_proxy_jump_broken">The jump host is missing or the chain loops back on itself. Check this host\'s settings.</string>
+    <string name="error_exec_timeout">The command timed out</string>
+    <string name="error_credential_lost">The stored credential could not be decrypted. Enter it again.</string>
+    <!-- 抽屉/终端页跳过来时，这台主机刚好被删了。监控页、文件页、编辑器共用 -->
+    <string name="error_host_missing">This host has been deleted</string>
+    <string name="edit_credentials">Edit credentials</string>
+
+    <!-- tmux 会话树 -->
+    <plurals name="tmux_windows">
+        <item quantity="one">%1$d window</item>
+        <item quantity="other">%1$d windows</item>
+    </plurals>
+    <string name="tmux_attached">attached</string>
+    <string name="tmux_active">active</string>
+    <string name="tmux_none">No tmux sessions</string>
+    <string name="tmux_absent">tmux is not installed on this host</string>
+    <string name="tmux_loading">Reading tmux…</string>
+    <string name="tmux_failed">Could not read tmux · tap to retry</string>
+    <string name="tmux_toggle_windows">Show windows</string>
+    <string name="tmux_rename">Rename</string>
+    <string name="tmux_rename_title">Rename session</string>
+    <string name="tmux_session_name">Session name</string>
+    <string name="tmux_detach_others">Detach other clients</string>
+    <string name="tmux_kill">Kill session</string>
+    <string name="tmux_kill_title">Kill session?</string>
+    <string name="tmux_new_session">New tmux session</string>
+    <string name="tmux_new_window">New window</string>
+    <string name="tmux_install">Install</string>
+    <string name="tmux_install_hint">Tap to install it</string>
+    <string name="tmux_install_title">Install tmux?</string>
+    <string name="tmux_install_message">This runs in a new terminal on the host, so you can type a sudo password if it asks:\n\n%1$s</string>
+    <string name="tmux_kill_window">Close window</string>
+    <string name="tmux_kill_window_title">Close window?</string>
+    <string name="tmux_kill_window_message">%1$s and everything running inside it will be terminated. If it is the session\'s last window, the session ends with it.</string>
+    <string name="tmux_kill_message">%1$s and everything running inside it will be terminated.</string>
+    <string name="tmux_stale_refreshed">That list was out of date, so nothing was changed. It has been reloaded — try again.</string>
+    <string name="snapshot_just_now">just now</string>
+    <string name="snapshot_minutes">%1$d min ago</string>
+    <string name="snapshot_hours">%1$d h ago</string>
+    <string name="snapshot_days">%1$d d ago</string>
+
+    <!-- 监控页。KiB/MiB、↑↓、% 是通用符号，和键帽一样不做本地化 -->
+    <string name="monitor_system">System</string>
+    <string name="monitor_distro">Distribution</string>
+    <string name="monitor_kernel">Kernel</string>
+    <string name="monitor_hostname">Hostname</string>
+    <string name="monitor_uptime">Uptime</string>
+    <string name="monitor_unavailable">unavailable</string>
+    <string name="monitor_uptime_days">%1$d d %2$d h</string>
+    <string name="monitor_uptime_hours">%1$d h %2$d min</string>
+    <string name="monitor_uptime_minutes">%1$d min</string>
+    <string name="monitor_cpu">CPU</string>
+    <plurals name="monitor_cores">
+        <item quantity="one">%1$d core</item>
+        <item quantity="other">%1$d cores</item>
+    </plurals>
+    <string name="monitor_core">Core %1$d</string>
+    <string name="monitor_load">Load %1$s · %2$s · %3$s</string>
+    <string name="monitor_memory">Memory</string>
+    <string name="monitor_swap">Swap</string>
+    <string name="monitor_disk">Disks</string>
+    <string name="monitor_network">Network</string>
+    <string name="monitor_containers">Containers</string>
+    <string name="monitor_processes">Top processes</string>
+    <string name="monitor_process_detail">PID %1$d · CPU %2$s%% · MEM %3$s%%</string>
+    <string name="monitor_usage">%1$s / %2$s</string>
+    <string name="monitor_percent">%1$s%%</string>
+    <string name="monitor_net_rates">↓ %1$s   ↑ %2$s</string>
+    <string name="monitor_local_ip">Local IP</string>
+    <string name="monitor_public_ip">Public IP</string>
+    <plurals name="monitor_virtual_nics">
+        <item quantity="one">%1$d virtual interface</item>
+        <item quantity="other">%1$d virtual interfaces</item>
+    </plurals>
+    <string name="monitor_container_stats">CPU %1$s%% · MEM %2$s</string>
+    <string name="monitor_container_mem">%1$s (%2$s%%)</string>
+    <string name="monitor_sort_cpu">CPU ↓</string>
+    <string name="monitor_sort_memory">MEM ↓</string>
+    <string name="monitor_sort_toggle">Sort by CPU or memory</string>
+    <string name="monitor_copy_ip">Copy IP</string>
+    <string name="monitor_ip_copied">IP copied</string>
+    <string name="monitor_expand">Expand</string>
+    <string name="monitor_collapse">Collapse</string>
+    <string name="monitor_unsupported">This host runs an OS we cannot read yet — only Linux is supported for now.</string>
+    <string name="monitor_failed">Could not read metrics: %1$s</string>
+
+    <!-- 文件页 -->
+    <string name="files_empty">This folder is empty</string>
+    <string name="files_failed">Could not list this folder: %1$s</string>
+    <string name="files_name">Name</string>
+    <string name="files_upload">Upload</string>
+    <string name="files_download">Download</string>
+    <string name="files_edit">Edit as text</string>
+    <string name="files_go_up">Parent folder</string>
+    <string name="files_copy_path">Copy path</string>
+    <string name="files_path_copied">Path copied</string>
+    <string name="files_send_to_terminal">Insert into terminal</string>
+    <string name="files_new_folder">New folder</string>
+    <string name="files_new_folder_title">New folder</string>
+    <string name="files_rename_title">Rename</string>
+    <string name="files_show_hidden">Hidden files</string>
+    <string name="files_delete_title">Delete?</string>
+    <string name="files_delete_message">%1$s will be deleted.</string>
+    <string name="files_delete_dir_message">%1$s and everything inside it will be deleted. This cannot be undone.</string>
+
+    <!-- 传输队列 -->
+    <string name="files_transfers">Transfers</string>
+    <string name="files_transfers_active">Transferring · %1$d</string>
+    <string name="files_transfers_idle">Transfers</string>
+    <string name="files_transfers_clear">Clear</string>
+    <string name="files_transfer_cancel">Cancel</string>
+    <string name="files_transfer_queued">Queued · %1$s</string>
+    <string name="files_transfer_progress">%1$s / %2$s</string>
+    <string name="files_transfer_done">Done</string>
+    <string name="files_transfer_cancelled">Cancelled</string>
+    <string name="files_transfer_failed">Failed: %1$s</string>
+
+    <!-- 文本编辑器 -->
+    <string name="file_edit_too_large">This file is %1$s. Only files under %2$s can be edited here — use the terminal for bigger ones.</string>
+    <string name="file_edit_binary">This looks like a binary file. Editing it here would corrupt it.</string>
+    <string name="file_edit_discard_title">Discard changes?</string>
+    <string name="file_edit_discard_message">Your edits to %1$s have not been saved.</string>
+    <string name="file_edit_discard">Discard</string>
+
+    <!-- 设置页 -->
+    <string name="settings_section_appearance">Appearance</string>
+    <string name="settings_section_general">General</string>
+    <string name="settings_follow_system">Follow system</string>
+    <string name="settings_theme">Theme</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_language">Language</string>
+    <string name="settings_language_zh">简体中文</string>
+    <string name="settings_language_en">English</string>
+    <string name="settings_palette">Terminal colors</string>
+    <string name="settings_palette_default">Default (xterm)</string>
+    <string name="settings_palette_solarized_dark">Solarized Dark</string>
+    <string name="settings_palette_gruvbox_dark">Gruvbox Dark</string>
+    <string name="settings_text_size">Terminal font size · %1$d sp</string>
+    <!-- 字号预览里的样例行。是终端命令，不翻译，中英两份保持一致 -->
+    <string name="settings_text_size_sample">$ tmux attach -t 0</string>
+    <string name="settings_quick_key_size">Quick bar key size · %1$d dp</string>
+    <string name="settings_about">About</string>
+    <string name="settings_keys_value">Import once, reuse on every host</string>
+    <string name="settings_project">Project</string>
+    <string name="settings_project_value">Source code, issues and releases</string>
+
+    <!-- 密钥管理 -->
+    <string name="keys_title">SSH keys</string>
+    <string name="keys_add">Import a key</string>
+    <string name="keys_edit_title">Edit key</string>
+    <string name="keys_empty">No keys yet</string>
+    <string name="keys_empty_hint">Import a key once and every host can use it.</string>
+    <plurals name="keys_used_by">
+        <item quantity="one">Used by %1$d host</item>
+        <item quantity="other">Used by %1$d hosts</item>
+    </plurals>
+    <string name="keys_unused">Not used by any host</string>
+    <string name="keys_broken">Could not be decrypted. Import it again.</string>
+    <string name="key_name">Name</string>
+    <string name="key_delete_title">Delete “%1$s”?</string>
+    <plurals name="key_delete_message">
+        <item quantity="one">%1$d host is using it and will need new credentials.</item>
+        <item quantity="other">%1$d hosts are using it and will need new credentials.</item>
+    </plurals>
+    <string name="key_delete_message_unused">No host is using it.</string>
+    <string name="error_key_name_required">Give the key a name</string>
+    <string name="error_key_pem_required">Paste or choose a private key</string>
+    <string name="error_key_pem_format">This does not look like a supported private key</string>
+
+    <!-- 应用内更新 -->
+    <string name="update_check_hint">Tap to check for updates</string>
+    <string name="update_checking">Checking…</string>
+    <string name="update_up_to_date">You are on the latest version</string>
+    <string name="update_available">Version %1$s is available</string>
+    <string name="update_no_notes">No release notes.</string>
+    <string name="update_download">Download and install</string>
+    <string name="update_downloading">Downloading · %1$d%%</string>
+    <string name="update_failed">Could not check for updates: %1$s</string>
+    <string name="update_install_failed">The system refused to install it: %1$s</string>
+    <string name="update_too_large">The download was far larger than an app update should be, so it was stopped and discarded.</string>
+    <string name="update_needs_permission">Allow installing apps</string>
+    <string name="update_needs_permission_message">Android needs your permission to let lightmux install an APK. Turn on \"Allow from this source\" on the next screen, then try again.</string>
+    <string name="update_verify_ok">Verified</string>
+    <string name="update_verify_unreadable">The downloaded file could not be read as an APK. It was deleted.</string>
+    <string name="update_verify_package">The downloaded APK is for a different app. It was deleted.</string>
+    <string name="update_verify_not_newer">The downloaded APK is not newer than the installed one. It was deleted.</string>
+    <string name="update_verify_signature">The downloaded APK is signed by someone else. It was deleted.</string>
+
+    <!-- 关于页。许可正文在两种语言下都保持英文原文，翻译后的许可没有法律效力 -->
+    <string name="about_version">Version %1$s</string>
+    <string name="about_tagline">A lightweight Android SSH client built for tmux</string>
+    <string name="about_license_title">License</string>
+    <string name="about_license_body">lightmux is free and open source software released under the MIT License.\n\nCopyright (c) 2026 ninvfeng</string>
+    <string name="about_notice_title">Notice · terminal-emulator / terminal-view</string>
+    <string name="about_notice_body">This product includes software developed as part of the Termux project.\n\nThe terminal core (terminal-emulator) and renderer (terminal-view) are vendored from termux/termux-app v0.118.0 and derive from Terminal Emulator for Android, Copyright (C) Jack Palevich and contributors. Both modules are licensed under the Apache License, Version 2.0. The full license text ships inside this app at assets/licenses/Apache-2.0.txt and is available at http://www.apache.org/licenses/LICENSE-2.0\n\nModifications by lightmux, all marked with a [lightmux] comment: terminal-emulator drops the local PTY JNI code, adds TerminalTransport (an abstract byte channel) and rewrites TerminalSession to drive a transport instead of a forked process, adding reconnect() so a dropped connection can be replaced while the emulator and its scrollback are preserved. terminal-view is unmodified.\n\nNo GPL-licensed code from termux-app is included in this application.</string>
+    <string name="about_dependencies_title">Other components</string>
+    <string name="about_dependencies_body">sshj — Apache-2.0 · SSH transport and SFTP\nBouncy Castle — Bouncy Castle License (MIT-style) · cryptography\nEdDSA-Java — CC0-1.0 · ed25519 keys\nAndroidX, Jetpack Compose, Material 3 — Apache-2.0\nKotlin standard library and coroutines — Apache-2.0\n\nJetBrains Mono — SIL Open Font License 1.1 · bundled terminal typeface\nCopyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono)\nThe full license text ships inside this app at assets/licenses/JetBrainsMono-OFL.txt and is available at https://scripts.sil.org/OFL\nThe font file is bundled unmodified. CJK characters fall back to the system font.</string>
+
+    <!-- 端口转发。服务端起在环回口上的服务，映射到手机本地端口 -->
+    <string name="forward_title">Port forwarding</string>
+    <string name="forward_add">New forward</string>
+    <string name="forward_probe">Rescan remote ports</string>
+    <string name="forward_filter">Filter ports</string>
+    <string name="forward_filter_none">No port matches that</string>
+    <string name="forward_loopback_note">Forwarded ports are bound to 127.0.0.1 — only this phone can reach them.</string>
+    <string name="forward_empty_hint">Pick one from the remote ports below, or add a forward by hand.</string>
+    <string name="forward_remote_ports">Listening on the remote host</string>
+    <string name="forward_remote_ports_empty">Nothing is listening on this host</string>
+    <string name="forward_mapping">server %1$s:%2$d → phone 127.0.0.1:%3$d</string>
+    <string name="forward_port_n">Port %1$d</string>
+    <string name="forward_port_loopback">%1$s · reachable only through a forward</string>
+    <string name="forward_port_add">Forward</string>
+    <string name="forward_port_added">Added</string>
+    <string name="forward_open">Open</string>
+    <string name="forward_status_starting">Connecting…</string>
+    <string name="forward_status_active">Active</string>
+    <string name="forward_status_retrying">Reconnecting · attempt %1$d</string>
+    <string name="forward_status_port_in_use">Local port %1$d is taken by another app</string>
+    <string name="forward_status_rejected">Connection rejected</string>
+    <string name="forward_status_host_gone">This host no longer exists</string>
+    <string name="forward_dialog_new">New forward</string>
+    <string name="forward_dialog_edit">Edit forward</string>
+    <string name="forward_remote_port">Remote port</string>
+    <string name="forward_local_port">Local port</string>
+    <string name="forward_remote_host">Target on the server</string>
+    <string name="forward_remote_host_hint">Usually localhost. Point it elsewhere to use this host as a jump box.</string>
+    <string name="forward_label">Label (optional)</string>
+    <string name="forward_port_out_of_range">Enter a port between 1 and 65535</string>
+    <string name="forward_port_privileged">Android cannot bind ports below 1024</string>
+    <string name="forward_delete_title">Delete this forward?</string>
+    <string name="home_forward">Port forwarding</string>
+    <!-- 终端里嗅到地址时的提示条 -->
+    <string name="forward_hint_detected">Found %1$s in the output</string>
+    <string name="forward_hint_ready">Forwarded → 127.0.0.1:%1$d</string>
+    <string name="forward_hint_open">Open</string>
+    <string name="forward_hint_ignore">Ignore</string>
+
+    <!-- 内置浏览器 -->
+    <string name="web_more">More</string>
+    <string name="web_go_forward">Forward</string>
+    <string name="web_open_external">Open in browser</string>
+
+    <string name="background_limit_message">This phone cuts the app off the network once it goes to the background, so forwards and terminals drop.</string>
+    <string name="background_limit_action">Allow</string>
+    <string name="settings_background">Background activity</string>
+    <string name="settings_background_restricted">Restricted — connections drop in the background. Tap to allow.</string>
+    <string name="settings_background_allowed">Allowed. If connections still drop, turn on unrestricted background activity in the system power settings.</string>
+</resources>

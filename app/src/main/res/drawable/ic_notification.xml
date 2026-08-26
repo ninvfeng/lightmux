@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 通知小图标：与启动图标同一个符号（tmux 窗格分割构成的 L）。
+     必须是纯白剪影 —— 状态栏会把整个图标按 alpha 通道重新着色，彩色画上去只会变成一团白。
+     这里只留 L、丢掉启动图标右上那块半透明窗格：状态栏只有 24dp，
+     半透明块在这个尺寸会糊成一片灰，反而把 L 的轮廓吃掉。
+     笔画占比也比启动图标粗（5.5/16 vs 14/46），细笔画在状态栏会被抗锯齿吃没。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M5,4 H8.5 A1,1 0 0 1 9.5,5 V19 A1,1 0 0 1 8.5,20 H5 A1,1 0 0 1 4,19 V5 A1,1 0 0 1 5,4 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,14.5 H19 A1,1 0 0 1 20,15.5 V19 A1,1 0 0 1 19,20 H12 A1,1 0 0 1 11,19 V15.5 A1,1 0 0 1 12,14.5 Z" />
+</vector>

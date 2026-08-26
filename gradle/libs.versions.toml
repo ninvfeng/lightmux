@@ -1,0 +1,55 @@
+[versions]
+# AGP / Gradle wrapper 钉死在 8.7.2 / 8.10.2：本机与 CI 镜像只装 android-35 + build-tools 35.0.0，
+# 升 compileSdk 要连带重做镜像，收益为零。下面所有 androidx 版本都是「仍然兼容 compileSdk 35」的最高稳定版，
+# 判据是 AAR 里的 META-INF/.../aar-metadata.properties 的 minCompileSdk，不是 release notes 的印象。
+agp = "8.7.2"
+# Kotlin 停在 2.1.21 不是保守，是两张官方表的交集：
+# ① KGP 兼容表里 2.1.20–2.1.21 支持的 AGP 上限**正好**是 8.7.2（2.2+ 上限才抬到 8.10/8.11）；
+# ② developer.android.com/build/kotlin-support 要求 Kotlin 2.2/2.3/2.4 分别配 R8 8.10.21/8.13.19/9.1.29，
+#    而 AGP 8.7.2 自带的 R8 到不了——实测 2.4.10 会刷几十条
+#    「An error occurred when parsing kotlin metadata」，R8 读不懂元数据就没法做相关优化。
+kotlin = "2.1.21"
+coreKtx = "1.16.0"            # 1.17.0 起 minCompileSdk=36
+lifecycle = "2.10.0"          # 2.11.0 的 *-compose 分支 minCompileSdk=37
+activityCompose = "1.10.1"    # 1.11.0 起 minCompileSdk=36
+composeBom = "2026.06.01"     # = compose 1.11.4 + material3 1.4.0；下一档 BOM 的 ui 1.12.0 要 36+
+datastore = "1.2.1"
+# 1.11.0 是拿 Kotlin 2.2 编的（868 个类带 mv=2.2.0 元数据），AGP 8.7.2 自带的 R8 读不懂，
+# 每次 release 都刷「An error occurred when parsing kotlin metadata」。
+# 1.10.2 是最后一个 mv=2.1.0 的版本，正好卡在本工具链的上限。
+# 已核对：其余依赖（compose 1.11.4 / material3 1.4.0 / lifecycle 2.10.0 / datastore 1.2.1 …）
+# 元数据全部 ≤ 2.1.0，coroutines 是唯一超标的那个。
+coroutines = "1.10.2"
+annotation = "1.10.0"
+sshj = "0.40.0"
+# BC 1.85 这一版官方发布的就是「prov 1.85.2 + pkix 1.85」这对组合（bcpkix 没有 1.85.2），
+# 所以这里必须拆成两个版本号，见 https://www.bouncycastle.org/download/bouncy-castle-java/
+bouncycastleProv = "1.85.2"
+bouncycastle = "1.85"
+junit = "4.13.2"
+
+[libraries]
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycle" }
+androidx-lifecycle-viewmodel-compose = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "lifecycle" }
+androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
+androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+androidx-ui = { group = "androidx.compose.ui", name = "ui" }
+androidx-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
+androidx-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
+androidx-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
+androidx-material3 = { group = "androidx.compose.material3", name = "material3" }
+androidx-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
+androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
+androidx-annotation = { group = "androidx.annotation", name = "annotation", version.ref = "annotation" }
+kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
+sshj = { group = "com.hierynomus", name = "sshj", version.ref = "sshj" }
+bouncycastle-prov = { group = "org.bouncycastle", name = "bcprov-jdk18on", version.ref = "bouncycastleProv" }
+bouncycastle-pkix = { group = "org.bouncycastle", name = "bcpkix-jdk18on", version.ref = "bouncycastle" }
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+android-library = { id = "com.android.library", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    只给环回口开明文 HTTP。
+
+    转发出来的地址一律是 http://127.0.0.1:端口，而 targetSdk 28 起系统默认禁止明文流量，
+    内置浏览器（WebScreen）会直接撞上 ERR_CLEARTEXT_NOT_PERMITTED——一个既没有网络请求
+    也没有报错日志的空白页。之前没暴露是因为那条路是甩给外部浏览器的，别人的 app 不受本 app 的策略约束。
+
+    不用 android:usesCleartextTraffic="true"：那是全局放开，等于把「更新检查、以后可能加的任何
+    HTTP 调用」一起降级成明文。这里只放行 127.0.0.1 与 localhost —— 流量根本没出过这台设备，
+    没有可被中间人窃听的路径；其余域名继续走默认的「必须 HTTPS」。
+
+    SSH 与 SFTP 不受影响：它们是裸 TCP，不走 Android 的 HTTP 栈。
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">localhost</domain>
+    </domain-config>
+</network-security-config>

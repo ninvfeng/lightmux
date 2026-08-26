@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 只给系统窗口用；Compose 侧配色见 ui/theme/Color.kt -->
+    <color name="lm_background">#FF101418</color>
+    <color name="ic_launcher_background">#FF101418</color>
+</resources>

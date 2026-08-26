@@ -1,0 +1,147 @@
+# lightmux 在 cnb.cool 的流水线。两条：
+#
+#   main push / PR  →  文案校验 + 单测 + release 构建（不出包）
+#   tag `vX.Y.Z`    →  同样的构建，但注入正式签名并挂到 Release
+#
+# 两条都走 `test assembleRelease` 而不是 assembleDebug，是为了让 lintVital 每次都跑到——
+# 它只在 release 路径执行，用 debug 构建做日常 CI 就会出现「日常全绿、一打 tag 就红」。
+# GitHub Actions（.github/workflows/ci.yml）是开源门面的那份，与这里并行，不互相依赖。
+#
+# 发版时 `chore(release)` 提交和 `vX.Y.Z` 一起推，push 与 tag_push 会各起一条流水线
+# 跑一模一样的构建。tag_push 这条是 main 那条的超集（多了版本号校验、签名、发布），
+# 所以让 main 那条让路：发版提交标题写成 `chore(release): X.Y.Z [skip ci]`。
+# `[skip ci]` 是 CNB 的跳过标记，只在 push / commit.add / branch.create 事件生效，
+# tag_push 不受影响——一次 push 推两样东西也只会跑发布那条。
+#
+# 签名密钥由私有仓库 ninvfeng/lightmux-build-keys 的 env.yml 注入，keystore 绝不入库：
+#   LIGHTMUX_KEYSTORE_B64        keystore 文件的 base64
+#   LIGHTMUX_KEYSTORE_PASSWORD   keystore 密码
+#   LIGHTMUX_KEY_ALIAS           key 别名
+#   LIGHTMUX_KEY_PASSWORD        key 密码
+# 变量名与 app/build.gradle.kts 的 signingConfigs 一一对应（除 _B64 是本文件解码前的中转）。
+# 那个文件用 allow_slugs + allow_events 锁死，只有本仓库的 tag_push 读得到——
+# 于是 PR 流水线哪怕跑的是外部贡献者推来的代码，也拿不到签名密钥。
+
+main:
+  push: &ci
+    - docker:
+        build: scripts/android-env.dockerfile
+        volumes:
+          - lightmux:/root/.gradle:copy-on-write
+
+      stages:
+        # 放最前面：几秒就出结果，没必要等构建跑完才发现文案漏翻。
+        - name: 双语文案校验
+          script:
+            - python3 scripts/check_strings.py
+
+        - name: 单测与 release 构建
+          script:
+            - chmod +x gradlew
+            - ./gradlew test assembleRelease --no-daemon --stacktrace
+
+  # 复用同一套检查。PR 拿不到签名密钥（见文件头），所以外部贡献者的分支跑在这里是安全的。
+  pull_request: *ci
+
+$:
+  tag_push:
+    - imports: https://cnb.cool/ninvfeng/lightmux-build-keys/-/blob/main/env.yml
+      docker:
+        build: scripts/android-env.dockerfile
+        # 分组固定写 lightmux:，让所有 tag 共用一份缓存——若按触发引用名分组，
+        # tag 各不相同就等于永不命中。copy-on-write 保证并发安全且失败不污染缓存。
+        volumes:
+          - lightmux:/root/.gradle:copy-on-write
+
+      stages:
+        - name: 环境自检
+          script:
+            - java -version
+            - python3 --version
+            - echo "ANDROID_HOME=$ANDROID_HOME"
+
+        # tag 与 versionName 对不上是最容易犯又最难发现的错：装到手机上版本号是旧的，
+        # 应用内更新还会反复提示同一个版本。在出包前就拦掉。
+        - name: 校验 tag 与 versionName
+          script:
+            - |
+              set -e
+              TAG="${CNB_BRANCH:-}"
+              VERSION_NAME=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts)
+              echo "tag=$TAG  versionName=$VERSION_NAME"
+              case "$TAG" in
+                v*) EXPECT="${TAG#v}" ;;
+                *)  echo "❌ tag 必须形如 vX.Y.Z"; exit 1 ;;
+              esac
+              [ "$EXPECT" = "$VERSION_NAME" ] || {
+                echo "❌ tag $TAG 与 versionName $VERSION_NAME 不一致"; exit 1; }
+              echo "✅ 版本号一致"
+
+        - name: 双语文案校验
+          script:
+            - python3 scripts/check_strings.py
+
+        # 放在出包前：CHANGELOG 漏写这一版就在这里红，而不是发出去之后
+        # 让用户在「检查更新」弹窗里看到一段跟上个版本一字不差的套话。
+        - name: 生成 Release 说明
+          script:
+            - python3 scripts/release_notes.py "$CNB_BRANCH" > RELEASE_NOTES.md
+            - cat RELEASE_NOTES.md
+
+        - name: 注入签名密钥
+          script:
+            - |
+              if [ -z "${LIGHTMUX_KEYSTORE_B64:-}" ]; then
+                echo "⚠ 未取到 LIGHTMUX_KEYSTORE_B64（密钥仓库未导入）——将回退 debug 签名"
+                exit 0
+              fi
+              echo "$LIGHTMUX_KEYSTORE_B64" | base64 -d > /tmp/lightmux-release.jks
+              ls -l /tmp/lightmux-release.jks
+              echo "✓ keystore 就位"
+
+        # release 构建会跑 lintVital，debug 抓不到的问题只有这里会炸，所以发版必须走这条路径。
+        # 单测顺带跑一遍：tag 有可能打在没进过 CI 的提交上。
+        - name: 构建 release APK
+          script:
+            - chmod +x gradlew
+            - |
+              if [ -f /tmp/lightmux-release.jks ]; then
+                export LIGHTMUX_KEYSTORE=/tmp/lightmux-release.jks
+                echo "→ 使用正式签名"
+              else
+                echo "→ 回退 debug 签名"
+              fi
+              ./gradlew test assembleRelease --no-daemon --stacktrace
+
+        # 守卫：确认产物存在，且在有密钥时真的用了正式签名。
+        # 回退到 debug 签名的包能装但无法覆盖升级，发出去就是一次废版本。
+        - name: 校验产物
+          script:
+            - |
+              set -e
+              APK=app/build/outputs/apk/release/app-release.apk
+              test -f "$APK" || { echo "❌ 未找到 APK：$APK"; exit 1; }
+              apksigner verify --print-certs "$APK" | tee /tmp/certs.txt
+              if [ -f /tmp/lightmux-release.jks ]; then
+                grep -q "CN=Android Debug" /tmp/certs.txt && {
+                  echo "❌ 注入了 keystore 却打出了 debug 签名，签名配置有问题"; exit 1; }
+                echo "✅ 正式签名"
+              fi
+              mkdir -p dist
+              cp "$APK" "dist/lightmux-${CNB_BRANCH}.apk"
+              ls -lh dist/
+
+        # 描述走 descriptionFromFile 而不是内联：内联只能写死一段与版本无关的套话，
+        # 而这段文字就是应用内「检查更新」弹窗里用户唯一能看到的变更说明。
+        - name: 发布 Release
+          type: git:release
+          options:
+            tag: $CNB_BRANCH
+            title: lightmux $CNB_BRANCH
+            descriptionFromFile: RELEASE_NOTES.md
+
+        - name: 上传 APK 到 Release
+          image: cnbcool/attachments:latest
+          settings:
+            attachments:
+              - dist/*.apk

@@ -1,0 +1,170 @@
+package net.lighttools.lightmux
+
+import net.lighttools.lightmux.data.AuthMethod
+import net.lighttools.lightmux.data.Host
+import net.lighttools.lightmux.ui.host.AuthKind
+import net.lighttools.lightmux.ui.host.HostForm
+import net.lighttools.lightmux.ui.host.HostFormError
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class HostFormTest {
+
+    private fun valid() = HostForm(
+        name = "gz3",
+        hostname = "8.138.125.201",
+        port = "22",
+        username = "root",
+        password = "s3cret",
+    )
+
+    @Test
+    fun `填全了就没有错误`() {
+        assertTrue(valid().validate().isEmpty())
+    }
+
+    @Test
+    fun `主机名 用户名 凭据都是必填`() {
+        val errors = HostForm().validate()
+        assertEquals(
+            setOf(HostFormError.Hostname, HostFormError.Username, HostFormError.Secret),
+            errors,
+        )
+    }
+
+    @Test
+    fun `端口必须落在 1-65535`() {
+        assertTrue(HostFormError.Port in valid().copy(port = "0").validate())
+        assertTrue(HostFormError.Port in valid().copy(port = "65536").validate())
+        assertTrue(HostFormError.Port in valid().copy(port = "").validate())
+        assertTrue(HostFormError.Port in valid().copy(port = "22x").validate())
+        assertTrue(valid().copy(port = " 2222 ").validate().isEmpty())
+    }
+
+    @Test
+    fun `私钥方式校验的是 PEM 而不是密码`() {
+        val form = valid().copy(authKind = AuthKind.PrivateKey, password = "s3cret", pem = "")
+        assertTrue(HostFormError.Secret in form.validate())
+        assertTrue(form.copy(pem = "-----BEGIN OPENSSH PRIVATE KEY-----").validate().isEmpty())
+    }
+
+    @Test
+    fun `沿用已保存的凭据时不再要求填写`() {
+        assertTrue(valid().copy(password = "", keepSecret = true).validate().isEmpty())
+    }
+
+    @Test
+    fun `名称留空就用主机名兜底，空命令存 null`() {
+        val host = valid().copy(name = "  ", loginCommand = "").toHost()
+        assertEquals("8.138.125.201", host.name)
+        assertNull(host.loginCommand)
+    }
+
+    @Test
+    fun `保存时不改凭据就把原来的原样带回去`() {
+        val existing = Host(
+            id = "h1",
+            name = "gz3",
+            hostname = "8.138.125.201",
+            username = "root",
+            auth = AuthMethod.Password("old"),
+        )
+        val saved = HostForm.of(existing).copy(username = "deploy").toHost(existing)
+
+        assertEquals("h1", saved.id)
+        assertEquals("deploy", saved.username)
+        assertEquals(AuthMethod.Password("old"), saved.auth)
+    }
+
+    @Test
+    fun `编辑表单不回显明文密码`() {
+        val existing = Host(
+            name = "gz3",
+            hostname = "8.138.125.201",
+            username = "root",
+            auth = AuthMethod.PrivateKey("PEM", "pass"),
+        )
+        val form = HostForm.of(existing)
+
+        assertEquals("", form.password)
+        assertEquals("", form.pem)
+        assertEquals("", form.passphrase)
+        assertTrue(form.keepSecret)
+        assertEquals(AuthKind.PrivateKey, form.authKind)
+    }
+
+    @Test
+    fun `凭据解密失败时不许显示为已保存，必须逼用户重填`() {
+        val broken = Host(
+            name = "gz3",
+            hostname = "8.138.125.201",
+            username = "root",
+            // HostStore 解不出密文时会退化成空串
+            auth = AuthMethod.Password(""),
+        )
+        val form = HostForm.of(broken)
+        assertTrue(HostFormError.Secret in form.validate())
+    }
+
+    @Test
+    fun `新填的凭据覆盖旧的`() {
+        val existing = Host(
+            id = "h1",
+            name = "gz3",
+            hostname = "8.138.125.201",
+            username = "root",
+            auth = AuthMethod.Password("old"),
+        )
+        val saved = HostForm.of(existing).copy(password = "new", keepSecret = false).toHost(existing)
+        assertEquals(AuthMethod.Password("new"), saved.auth)
+    }
+
+    @Test
+    fun `选了密钥库里的钥匙就不用再填 PEM`() {
+        val form = valid().copy(authKind = AuthKind.PrivateKey, pem = "", keyId = "k1")
+        assertTrue(form.validate().isEmpty())
+        assertEquals(AuthMethod.PrivateKey("", null, keyId = "k1"), form.toHost().auth)
+    }
+
+    @Test
+    fun `引用密钥库的主机不显示为已保存凭据`() {
+        val existing = Host(
+            name = "gz3",
+            hostname = "8.138.125.201",
+            username = "root",
+            // HostStore 读出来时会把 PEM 装配进来，但这台主机的私钥源头是密钥库
+            auth = AuthMethod.PrivateKey("PEM", null, keyId = "k1"),
+        )
+        val form = HostForm.of(existing)
+
+        assertEquals("k1", form.keyId)
+        assertTrue(!form.keepSecret)
+        // 表单里没有任何要填的东西：钥匙在库里
+        assertTrue(form.validate().isEmpty())
+    }
+
+    @Test
+    fun `从密钥库改回手工粘贴不会捡回旧的 keyId`() {
+        val existing = Host(
+            id = "h1",
+            name = "gz3",
+            hostname = "8.138.125.201",
+            username = "root",
+            auth = AuthMethod.PrivateKey("PEM", null, keyId = "k1"),
+        )
+        val saved = HostForm.of(existing).copy(keyId = null, pem = "NEW").toHost(existing)
+        assertEquals(AuthMethod.PrivateKey("NEW", null), saved.auth)
+    }
+
+    @Test
+    fun `私钥口令留空存 null 而不是空串`() {
+        val host = valid().copy(
+            authKind = AuthKind.PrivateKey,
+            pem = "  -----BEGIN-----  ",
+            passphrase = "",
+        ).toHost()
+        assertEquals(AuthMethod.PrivateKey("-----BEGIN-----", null), host.auth)
+    }
+}

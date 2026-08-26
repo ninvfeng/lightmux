@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      # 依赖与 build-cache 落盘，第二次之后省掉大半构建时间
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # 双语文案校验放在构建前：它一秒出结果，没必要让人等完整编译才看到少翻了一条
+      - name: Check bilingual strings
+        run: python3 scripts/check_strings.py
+
+      # lintVital 只在 release 路径执行，debug 构建抓不到。不跟着跑一遍的话，
+      # PR 在这里全绿、维护者一打 tag 就红——而那时候是发版当口，最不该修问题。
+      # 只跑 lintVitalRelease 而不是整个 assembleRelease：省掉一次打包，
+      # 也不产出一个签名不对却容易被当成正式包的 release APK。
+      - name: Assemble debug APK and run unit tests
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug test lintVitalRelease --stacktrace
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: lightmux-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+      # 失败时没有报告就只能盯着日志猜，测试红了尤其需要
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: '**/build/reports/tests/'
+          if-no-files-found: ignore

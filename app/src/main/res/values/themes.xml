@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Lightmux" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowBackground">@color/lm_background</item>
+        <!-- 状态栏图标用浅色：本 app 的状态栏背景恒为深色。不带 tools:targetApi——
+             这条属性 API 23 起就有，minSdk 24 下压不出 NewApi，标注只是噪音 -->
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
