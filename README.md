@@ -27,7 +27,7 @@ lightmux 把这个层级倒过来：主页直接列出 **主机 → tmux 会话 
 ## 下载
 
 签名 APK 发布在 [CNB Releases](https://cnb.cool/ninvfeng/lighttools/lightmux/-/releases)，
-需要 Android 7.0 及以上（minSdk 24）。没有上架任何应用商店，安装时需要放行一次「未知来源」。
+需要 Android 7.0 及以上（minSdk 24）。当前未上架任何应用商店，安装时需要放行一次「未知来源」。
 
 代码在 GitHub 与 CNB 各有一份，但发版流水线只跑在 CNB，所以包在那边。见下方[仓库](#仓库)。
 
@@ -93,9 +93,7 @@ lightmux 把这个层级倒过来：主页直接列出 **主机 → tmux 会话 
   操作栏在底部且只有 44dp 高，屏幕尽量让给网页，「用外部浏览器打开」收在这条栏的「⋮」里
 
 **应用内更新**
-- 手动查 CNB Releases（发布包就挂在那儿），**没有后台轮询**。
-  更新源认 CNB 而不是 GitHub，是因为签名出包的流水线在那边；指向别处等于
-  「代码在哪、包在哪」有两个答案，而其中一个迟早会忘记同步
+- 支持应用内检查更新，release 挂在 CNB 仓库，**没有后台轮询**
 - 下载后校验包名、版本确实更新、签名与已安装应用一致，通过才拉起系统安装器；
   任何一项不过就删掉下载的文件
 
@@ -109,16 +107,7 @@ lightmux 把这个层级倒过来：主页直接列出 **主机 → tmux 会话 
 
 ## 不做的事
 
-- **mosh**。它是 GPLv3，分发含它的 APK 就得一直随附源码，对一个 MIT 项目是持续负担。
-  `TerminalTransport` 留了扩展位，但真要做也会是**独立可选下载**，不进主 APK。
 - 本地终端 / 内置 shell（那是 termux 的地盘）、字体下载中心、云同步 / 账号体系、桌面端。
-
-## 路线图
-
-以下**尚未实现**：
-
-参数化快捷命令 · 命令历史 · 输入手势（空格拖光标 / 双指切会话）· 应用锁（生物识别）·
-应用内生成密钥 + `ssh-copy-id` · `ssh_config` 导入 · 加密备份恢复 · 导入本地字体 · 更多配色。
 
 ## 截图
 
@@ -137,20 +126,6 @@ python3 scripts/check_strings.py           # 双语文案校验
 ```
 
 minSdk 24（Android 7.0），targetSdk 35，Kotlin 2.1 + Jetpack Compose + Material 3，AGP 8.7。
-
-### 发布签名
-
-`assembleRelease` 从环境变量读 keystore：
-
-| 变量 | 含义 |
-|---|---|
-| `LIGHTMUX_KEYSTORE` | `.jks` keystore 路径 |
-| `LIGHTMUX_KEYSTORE_PASSWORD` | keystore 密码 |
-| `LIGHTMUX_KEY_ALIAS` | key 别名 |
-| `LIGHTMUX_KEY_PASSWORD` | key 密码 |
-
-没设 `LIGHTMUX_KEYSTORE` 时 release 构建**回退 debug 签名**，本地照样能出包——
-但这样的 APK 签名与正式发布不同，**无法覆盖升级**官方版本。
 
 ## 许可
 

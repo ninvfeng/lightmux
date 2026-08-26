@@ -28,8 +28,8 @@ one more tap away.
 ## Download
 
 Signed APKs are published on [CNB Releases](https://cnb.cool/ninvfeng/lighttools/lightmux/-/releases).
-Requires Android 7.0 (minSdk 24). Not on any app store — installing means allowing installation from
-an unknown source once.
+Requires Android 7.0 (minSdk 24). Not on any app store for now — installing means allowing
+installation from an unknown source once.
 
 The code lives on GitHub and CNB alike; the release pipeline runs only on CNB, so that is where the
 packages are. See [Repositories](#repositories) below.
@@ -102,10 +102,7 @@ Everything listed here is implemented and shipping.
   still one tap away in that bar's overflow menu
 
 **In-app updates**
-- Checks CNB Releases on demand, where the signed APKs are published — there is **no background polling**.
-  The update source points at CNB rather than GitHub because that is where the pipeline signs and
-  publishes; pointing it elsewhere would mean "where is the code, where is the package" has two
-  answers, and one of them eventually goes stale
+- In-app update check; releases live in the CNB repository — there is **no background polling**
 - The downloaded APK is verified (package name, version is actually newer, signature matches the
   installed app) before the system installer is invoked; anything that fails verification is deleted
 
@@ -120,18 +117,7 @@ Everything listed here is implemented and shipping.
 
 ## Not doing
 
-- **mosh.** It is GPLv3, which would put a permanent source-distribution obligation on every APK of an
-  otherwise MIT project. The `TerminalTransport` interface leaves room for it; if it ever happens it
-  will be an optional separate download, not part of the main APK.
 - Local terminal / bundled shell (that is termux's job), a font download center, cloud sync, desktop.
-
-## Roadmap
-
-**Not implemented yet:**
-
-Parameterised quick commands · command history · input gestures (drag-to-move-cursor, two-finger
-session switch) · app lock (biometric) · in-app key generation + `ssh-copy-id` · `ssh_config` import ·
-encrypted backup and restore · importing a local font file · more palettes.
 
 ## Screenshots
 
@@ -150,21 +136,6 @@ python3 scripts/check_strings.py           # bilingual string resource check
 ```
 
 minSdk 24 (Android 7.0), targetSdk 35, Kotlin 2.1 + Jetpack Compose + Material 3, AGP 8.7.
-
-### Release signing
-
-`assembleRelease` picks up the keystore from environment variables:
-
-| Variable | Meaning |
-|---|---|
-| `LIGHTMUX_KEYSTORE` | path to the `.jks` keystore |
-| `LIGHTMUX_KEYSTORE_PASSWORD` | keystore password |
-| `LIGHTMUX_KEY_ALIAS` | key alias |
-| `LIGHTMUX_KEY_PASSWORD` | key password |
-
-If `LIGHTMUX_KEYSTORE` is unset the release build **falls back to the debug signing key**, so a local
-release build still works — but such an APK cannot be used to upgrade over an official release, since
-the signatures differ.
 
 ## License
 
