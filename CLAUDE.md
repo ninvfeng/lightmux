@@ -57,6 +57,10 @@ tmux 列表、监控采集、SFTP 都复用同一条 SSH 连接开新 channel，
 3. **会话身份跨连接用 name**（`$id` 只在单个 tmux server 生命周期内有效）；窗口切换用 `@id`。
 4. **解析失败返回 `Malformed`，不许伪装成空列表**——空列表会让 UI 显示「没有会话」，用户以为会话丢了。
 5. attach 用 `new-session -A -s <name>`（原子，存在则附加），接管加 `-D`。
+   会话上已有别的客户端时改走**分组镜像会话** `<name> (lightmux)`（`destroy-unattached on`），
+   整条链是 `镜像 || 直连 || 新建`，**全 `||`、中间不许有 `;`**：`;` 后面那段在 attach 成功
+   返回（= 用户 detach）之后照样会跑。镜像里的 `set-option`/`select-window`/`new-window`
+   **一律不带 `-t`**——那个 `-t` 是 target-pane，不认 `=` 精确前缀还会 fnmatch 到别的会话上。
 6. 动作命令包成首行 `__LM_RC__:<code>` + 原始输出（stderr 合入），统一解析退出码。
 
 ## 约定

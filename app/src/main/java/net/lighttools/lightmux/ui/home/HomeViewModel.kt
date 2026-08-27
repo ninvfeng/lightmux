@@ -259,7 +259,7 @@ class HomeViewModel(
     fun openWindow(host: Host, name: String, window: TmuxWindow): String {
         liveAttachment(host.id, name)?.let { handle ->
             viewModelScope.launch {
-                runCatching { tmux.selectWindow(host, window.id, serverIdOf(host.id)) }
+                runCatching { tmux.selectWindow(host, name, window.id, serverIdOf(host.id)) }
                     // 拦下了就重探：用户马上会回到主页，那时该看到的是这个 server 的真实窗口
                     .onSuccess { staleNotice = it.stale; if (it.stale) probe(host) }
                     .onFailure { actionError = it.shortMessage() }

@@ -52,8 +52,8 @@ class TmuxRepository(
      * @param serverId 见 [ProbeResult.Sessions.serverId]；null 或对不上都直接返回
      *   [ActionResult.STALE]，一个字节都不发
      */
-    suspend fun selectWindow(host: Host, windowId: String, serverId: String?): ActionResult =
-        runWindowAction(host, Tmux.selectWindowCommand(windowId, serverId))
+    suspend fun selectWindow(host: Host, session: String, windowId: String, serverId: String?): ActionResult =
+        runWindowAction(host, Tmux.selectWindowCommand(session, windowId, serverId))
 
     /** 同上：已经 attach 着的会话开新窗口也走侧通道，前台可能正跑着全屏 TUI。 */
     suspend fun newWindow(host: Host, session: String): ActionResult =

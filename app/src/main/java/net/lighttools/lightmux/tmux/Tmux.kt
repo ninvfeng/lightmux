@@ -44,7 +44,7 @@ object Tmux {
     val PACKAGE_MANAGERS = listOf("apt-get", "dnf", "yum", "pacman", "apk", "zypper", "brew", "pkg")
 
     /**
-     * 会话行格式：`已附加客户端数:窗口数:$会话id:会话名`
+     * 会话行格式：`已附加客户端数:窗口数:会话组大小:组内客户端数:$会话id:会话名`
      *
      * 三条约束绑在一起：
      * - 分隔符用 `:` 不用 TAB——tmux 会把名字里的 TAB 替换成 `_`，用 TAB 分隔就分不清
@@ -52,8 +52,38 @@ object Tmux {
      * - **名字一律放行尾**，因为会话名本身可以包含 `:`（`tmux new -s a:b` 完全合法）。
      * - 名字前面全是数值/id 字段（无 `:`），所以解析时按 `split(limit = N+1)` 取前 N 段，
      *   剩下的整段都是名字。
+     *
+     * 两个组字段是给镜像会话用的（见 [mirrorName]），**不能改用 `#{session_group}`**：
+     * 那个字段的值是组名，而组名就是某个会话名，一样可以包含 `:`——一行里只容得下
+     * 行尾那一个自由字段。`#{session_group_size}` 是数值，不在组里时为空串。
      */
-    const val SESSION_FORMAT = "#{session_attached}:#{session_windows}:#{session_id}:#{session_name}"
+    const val SESSION_FORMAT =
+        "#{session_attached}:#{session_windows}:#{session_group_size}:#{session_group_attached}:" +
+            "#{session_id}:#{session_name}"
+
+    /**
+     * 镜像会话的名字后缀（见 [mirrorName]）。
+     *
+     * 不含 `*?[]`：tmux 的 target 匹配是「先精确、再 fnmatch、再前缀」，而
+     * `set-option` / `set-hook` 这类命令的 `-t` **不认 `=` 精确前缀**。实测里
+     * `set-option -t 'dev [lightmux]' destroy-unattached on` 会被 fnmatch 当成字符类，
+     * 打到用户一个叫 `dev x` 的会话上，那个会话下次 detach 时就没了。
+     * 圆括号不是 fnmatch 元字符，用它。
+     */
+    const val MIRROR_SUFFIX = " (lightmux)"
+
+    /**
+     * 「另开一份视图」用的分组镜像会话名。
+     *
+     * 同一个组里的会话**共享窗口集合，但各有各的当前窗口和尺寸**——这正是手机需要的：
+     * 电脑上那个客户端还开着的时候，两边 attach 同一个会话会按 `window-size`（tmux 3.1 起
+     * 默认 `latest`）跟着最近活动的客户端来回改尺寸，每交替输入一次就整屏重排一次。
+     * 而且手机在主页点一下窗口，电脑那块屏会跟着一起切走。镜像会话把这两条一起解决。
+     *
+     * 只在**确实有别的客户端连着**时才建（见 [attachCommand]）：没人跟你抢的时候
+     * 多一个会话纯属在用户的 `tmux ls` 里添乱。
+     */
+    fun mirrorName(session: String): String = session + MIRROR_SUFFIX
 
     /**
      * 窗口行格式：`是否活动:面板数:索引:@窗口id:$会话id:窗口名`
@@ -121,56 +151,158 @@ object Tmux {
         "[ \"\$($SERVER_PID_EXPR)\" = ${quote(serverId)} ]"
 
     /**
-     * attach 命令：**存在则附加，否则创建**，一条命令原子完成。
+     * 「这个会话上已经有别的客户端」的服务端断言。
      *
-     * 这是缓存过期的兜底（PRD §4.3）：从三分钟前的快照点进一个已经被 kill 的会话，
-     * 最坏结果只是新建了一个同名会话，而不是甩用户一句「会话不存在」。
+     * 不用 `display-message -p -t <会话> '#{session_attached}'`——实测那条在没有客户端
+     * 可供渲染格式串时返回空串，有没有人连都一样，判据直接失效。`list-clients -t` 是
+     * 直接列出客户端，有输出就是有人连着。
+     */
+    private fun hasOtherClient(name: String): String =
+        "[ -n \"\$(tmux list-clients -t ${target(name)} 2>/dev/null)\" ]"
+
+    /**
+     * 建镜像会话并 attach 的 **单条 tmux 命令列表**。三条纪律缠在一起，改之前先读完：
+     *
+     * 1. `set-option` **必须和 `attach-session` 在同一次 tmux 调用里**。分成两次调用的话，
+     *    中间那一瞬镜像会话既设了 `destroy-unattached on` 又还没人 attach，server 的下一轮
+     *    检查就把它销毁了（实测踩过，表现是「镜像建了又没了、退回直连」）。
+     * 2. `set-option` / `select-window` / `new-window` 一律**不带 `-t`**。它们的 `-t` 是
+     *    target-pane，既不认 `=` 精确前缀又会 fnmatch 到别的会话上（见 [MIRROR_SUFFIX]）；
+     *    而在 `new-session -d` 之后，不带 `-t` 的命令正好落在刚建出来的那个会话上（实测）。
+     * 3. `\;` 前后的空格不能省，那是 tmux 的命令分隔符，shell 要把反斜杠原样交给 tmux。
+     *
+     * **不加 `-A`**：名字被占时 `-A` 会直接 attach 那个会话，而占用者可能是用户自己起的同名会话，
+     * 那就 attach 到了完全无关的内容上。没有 `-A` 时名字被占只是建不出来、退回直连——
+     * 断线重连撞上还没被回收的旧镜像就属于这种，结果等于改动前的行为（跟着抢一下尺寸），
+     * 旧镜像那个死客户端一被 tmux 发现就会连镜像一起收掉，下次连接自愈。
+     *
+     * @param extra 夹在建会话与 attach 之间的额外 tmux 命令（切窗口 / 开新窗口）
+     */
+    private fun mirrorAttach(name: String, extra: List<String>): String {
+        val mirror = mirrorName(name)
+        val steps = listOf("new-session -d -t ${target(name)} -s ${quote(mirror)}") + extra +
+            listOf("set-option destroy-unattached on", "attach-session -t ${target(mirror)}")
+        return "tmux " + steps.joinToString(" \\; ") + " 2>/dev/null"
+    }
+
+    /** 不走镜像时的 attach，同样包成一次 tmux 调用，好让整条链只靠 `&&` / `||` 串起来。 */
+    private fun directAttach(name: String, extra: List<String>): String =
+        "tmux " + (extra + "attach-session -t ${target(name)}").joinToString(" \\; ") + " 2>/dev/null"
+
+    /**
+     * 三段式 attach：**镜像 → 直连 → 新建**，全靠 `||` 串，中间不许出现 `;`。
+     *
+     * `A || B || C` 是短路的：前一段返回 0（attach 正常返回意味着用户 detach 了）后面就不跑。
+     * 早先写成 `A && B || C; D` 那样，`;` 后面那段在镜像 attach 成功之后照样会执行，
+     * 用户一 detach 就被原地重新 attach 回原会话——分支等于白写。
+     *
+     * 最后那段 `new-session -A` 是缓存过期的兜底（PRD §4.3）：从三分钟前的快照点进一个
+     * 已经被 kill 的会话，最坏结果只是新建了一个同名会话，而不是甩用户一句「会话不存在」。
      *
      * **不加 `-D`**：踢掉别的客户端是用户的决定，走主页的「断开其他客户端」
      * （[detachOthersCommand]），不由 attach 顺手替他做——尤其是自动重连也走这条命令。
+     *
+     * @param mirrorExtra 镜像分支里夹在建会话与 attach 之间的 tmux 命令（**不带 `-t`**，
+     *   靠「刚建完的会话就是当前会话」定位）
+     * @param directExtra 直连分支里的对应命令（要自带 `-t`）
+     * @param guard 整条链前面的额外守卫，为空则没有
      */
-    fun attachCommand(name: String): String = "tmux new-session -A -s ${quote(name)}"
+    private fun attachChain(
+        name: String,
+        mirrorExtra: List<String> = emptyList(),
+        directExtra: List<String> = emptyList(),
+        guard: String? = null,
+    ): String {
+        val prefix = guard?.let { "$it && " }.orEmpty()
+        val mirror = "$prefix${hasOtherClient(name)} && ${mirrorAttach(name, mirrorExtra)}"
+        val direct = "$prefix${directAttach(name, directExtra)}"
+        return "$mirror || $direct || tmux new-session -A -s ${quote(name)}"
+    }
+
+    /**
+     * attach 命令。会话上已经有别的客户端时改走分组镜像会话（[mirrorName]），躲开尺寸互抢。
+     */
+    fun attachCommand(name: String): String = attachChain(name)
 
     /**
      * 先切窗口再 attach。
      *
      * 和「先走 exec 切窗口、再开终端」相比少一次往返，且冷启动（这台主机还没有连接）时
      * 不需要为了切一个窗口先拨一条连接。`select-window` 失败（缓存里的 `@id` 已经没了）
-     * 就静默跳过，用户仍然落在会话里——和 `-A` 的兜底是同一个思路。
+     * 就让这一段整体失败、落到最后的 `new-session -A`，用户仍然落在会话里。
      *
      * 切窗口可逆，但切错仍然是错的，所以同样带 [requireServer] 校验：pid 对不上就只 attach 不切。
      * `serverId` 为 null（旧版缓存里没有这一行）时退化成纯 attach——落在会话的当前窗口上，
      * 总好过拿一个来路不明的 `@id` 去赌。
+     *
+     * 走镜像会话时切窗口挪进 tmux 命令列表里：切的是**镜像自己的**当前窗口，
+     * 电脑上那块屏不会跟着一起跳走——那正是镜像会话要解决的另一半问题。
      */
     fun attachWindowCommand(name: String, windowId: String, serverId: String?): String {
-        val attach = attachCommand(name)
-        if (serverId == null) return attach
-        return "${requireServer(serverId)} && tmux select-window -t ${quote(windowId)} 2>/dev/null; $attach"
+        if (serverId == null) return attachCommand(name)
+        return attachChain(
+            name = name,
+            mirrorExtra = listOf("select-window -t ${quote(windowId)}"),
+            directExtra = listOf("select-window -t ${quote(windowId)}"),
+            guard = requireServer(serverId),
+        )
     }
+
+    /**
+     * 侧通道动作的目标：**优先打在镜像会话上**（见 [mirrorName]）。
+     *
+     * 手机连着的时候可能待在镜像里，对原会话下 `select-window` 就是把电脑上那块屏一起拽走；
+     * 而光给 `select-window` 一个 `@id`（不带会话前缀）在成组时是**歧义**的——实测 tmux
+     * 会挑「最近活动的那个会话」，也就是说切到谁头上全看运气。
+     *
+     * 镜像不存在（这次没走镜像分支，或者已经被 `destroy-unattached` 收掉）时第一条失败，
+     * 落回原会话。会话名里带 `:` 时前缀写法会被 tmux 从第一个 `:` 处切开、解析失败，
+     * 一样落回原会话——退化成改动前的行为，不会打错人。
+     */
+    private fun preferMirror(mirrorCommand: String, fallback: String): String =
+        "$mirrorCommand 2>/dev/null || $fallback"
 
     /**
      * 已 attach 的会话切窗口。**`serverId` 为 null 返回 null**：调用方该先刷新列表，
      * 而不是拿一个可能属于上一个 server 的 `@id` 碰运气。
      */
-    fun selectWindowCommand(windowId: String, serverId: String?): String? =
-        serverId?.let { "${requireServer(it)} || exit ${ActionResult.STALE}; tmux select-window -t ${quote(windowId)}" }
+    fun selectWindowCommand(session: String, windowId: String, serverId: String?): String? = serverId?.let {
+        val select = preferMirror(
+            mirrorCommand = "tmux select-window -t ${quote("=${mirrorName(session)}:$windowId")}",
+            fallback = "tmux select-window -t ${quote(windowId)}",
+        )
+        "${requireServer(it)} || exit ${ActionResult.STALE}; $select"
+    }
 
     /**
      * 在已有会话里开一个新窗口。
      *
      * tmux 自己会把新窗口选为当前窗口，所以这条命令跑完不必再 `select-window`，
      * 之后 attach 上去正好落在新窗口里。
+     *
+     * 打在镜像上时新窗口照样 link 进整个组（组共享窗口集合），电脑那边窗口列表里也有它，
+     * 只是不会被拽过去——见 [preferMirror]。
      */
-    fun newWindowCommand(session: String): String = "tmux new-window -t ${target(session)}"
+    fun newWindowCommand(session: String): String = preferMirror(
+        mirrorCommand = "tmux new-window -t ${target(mirrorName(session))}",
+        fallback = "tmux new-window -t ${target(session)}",
+    )
 
     /**
      * 没 attach 的会话开新窗口：建窗口与 attach 合成一条登录命令。
      *
      * 和 [attachWindowCommand] 同一个思路——少一次往返，冷启动时也不必先为一条 exec 拨连接。
-     * 建窗口失败（会话刚被 kill）就静默跳过，`-A` 会把这个会话重新建出来，用户仍然落在终端里。
+     * 建窗口失败（会话刚被 kill）就落到链尾的 `new-session -A`，把会话重新建出来——
+     * 新会话本来就自带一个窗口，用户要的「多一个窗口」并没有落空。
+     *
+     * 镜像分支里的 `new-window` 不带 `-t`：新窗口会 link 进整个组，但只在镜像会话里被选中，
+     * 电脑上那个客户端不会被拽到新窗口去。
      */
-    fun newWindowAndAttachCommand(session: String): String =
-        "${newWindowCommand(session)} 2>/dev/null; ${attachCommand(session)}"
+    fun newWindowAndAttachCommand(session: String): String = attachChain(
+        name = session,
+        mirrorExtra = listOf("new-window"),
+        directExtra = listOf("new-window -t ${target(session)}"),
+    )
 
     /**
      * 关掉一个窗口。用 `@id` 而不是 `会话名:index`——index 会随着窗口增删往前挪，
@@ -279,6 +411,7 @@ object Tmux {
             sessions += parsed.second
         }
         if (sessions.isEmpty()) return ProbeResult.NoSessions
+        val visible = hideMirrors(sessions)
 
         val windows = mutableMapOf<String, MutableList<TmuxWindow>>()
         for (line in lines.subList(windowsIndex + 1, endIndex)) {
@@ -291,11 +424,27 @@ object Tmux {
         }
 
         return ProbeResult.Sessions(
-            sessions = sessions.map { session ->
+            sessions = visible.map { session ->
                 session.copy(windows = windows[session.name].orEmpty().sortedBy { it.index })
             },
             serverId = parseServerId(lines, tmuxIndex, sessionsIndex),
         )
+    }
+
+    /**
+     * 把本 app 建的镜像会话从列表里藏掉——它和原会话是同一份内容，列出来只会让用户
+     * 以为自己多了一个会话，还得猜该点哪个。
+     *
+     * **只藏「原会话还在」的那种**：原会话被 kill 掉之后，镜像里那些窗口就只剩这一个入口了，
+     * 再藏就是把用户的窗口藏没了。
+     */
+    private fun hideMirrors(sessions: List<TmuxSession>): List<TmuxSession> {
+        val names = sessions.mapTo(mutableSetOf()) { it.name }
+        return sessions.filterNot { candidate ->
+            candidate.grouped &&
+                candidate.name.endsWith(MIRROR_SUFFIX) &&
+                candidate.name.removeSuffix(MIRROR_SUFFIX) in names
+        }
     }
 
     /**
@@ -324,16 +473,55 @@ object Tmux {
         return TmuxInstaller(manager = manager, root = parts[1] == "0")
     }
 
-    /** @return `$会话id` to 会话（窗口稍后填） */
+    /**
+     * @return `$会话id` to 会话（窗口稍后填）
+     *
+     * **两种宽度都要认**：DataStore 里躺着的是上一版探测输出，只有 4 段（没有那两个组字段）。
+     * 认死 6 段等于升级当天所有人的会话列表全变成「读取失败」，而组字段拿不到的后果
+     * 只是「不认得镜像会话」——那台机器上本来也没有本 app 建的镜像。
+     *
+     * 分辨新旧看的是 **`$id` 落在第几段**，不是段数：名字可以带 `:`，旧格式的
+     * `0:1:$0:a:b:c` 一样会被切成 6 段，按段数判就成了新格式，然后组字段那关过不去，
+     * 整份列表判 Malformed——用户看到的是「读取失败」，会以为会话没了。
+     */
     private fun parseSessionLine(line: String): Pair<String, TmuxSession>? {
-        val parts = line.split(":", limit = 4)
-        if (parts.size != 4) return null
-        val attached = parts[0].toNonNegativeIntOrNull() ?: return null
-        val windowCount = parts[1].toNonNegativeIntOrNull() ?: return null
-        val id = parts[2].takeIf { it.length > 1 && it.startsWith('$') } ?: return null
-        val name = parts[3].takeIf { it.isNotEmpty() } ?: return null
-        return id to TmuxSession(name = name, windowCount = windowCount, attachedClients = attached)
+        val parts = line.split(":", limit = 6)
+        // 新格式这一段是 #{session_group_size}，数值或空串，不可能以 $ 开头。
+        if (parts.size >= 3 && parts[2].startsWith('$')) {
+            val old = line.split(":", limit = 4)
+            if (old.size != 4) return null
+            return session(old[0], old[1], "", "", old[2], old[3])
+        }
+        if (parts.size != 6) return null
+        return session(parts[0], parts[1], parts[2], parts[3], parts[4], parts[5])
     }
+
+    private fun session(
+        attached: String,
+        windowCount: String,
+        groupSize: String,
+        groupAttached: String,
+        id: String,
+        name: String,
+    ): Pair<String, TmuxSession>? {
+        val clients = attached.toNonNegativeIntOrNull() ?: return null
+        val windows = windowCount.toNonNegativeIntOrNull() ?: return null
+        // 不在组里时 tmux 给的是空串，那不是畸形，是「没有组」。
+        val size = groupSize.toGroupFieldOrNull() ?: return null
+        val groupClients = groupAttached.toGroupFieldOrNull() ?: return null
+        val sessionId = id.takeIf { it.length > 1 && it.startsWith('$') } ?: return null
+        val sessionName = name.takeIf { it.isNotEmpty() } ?: return null
+        return sessionId to TmuxSession(
+            name = sessionName,
+            windowCount = windows,
+            // 镜像会话把手机那个客户端算在自己头上，原会话看上去就成了「没人连」。
+            // 组内客户端数才是用户想知道的那个数：这个会话现在到底有几块屏在看。
+            attachedClients = maxOf(clients, groupClients),
+            grouped = size > 0,
+        )
+    }
+
+    private fun String.toGroupFieldOrNull(): Int? = if (isEmpty()) 0 else toNonNegativeIntOrNull()
 
     /** @return `$会话id` to 窗口 */
     private fun parseWindowLine(line: String): Pair<String, TmuxWindow>? {

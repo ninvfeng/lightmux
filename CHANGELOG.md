@@ -6,6 +6,27 @@
 
 ## [Unreleased]
 
+## [0.1.57] - 2026-08-27
+
+### Changed
+
+- **attach 一个电脑上正开着的会话时，改开一个「分组镜像会话」**。tmux 3.1 起 `window-size`
+  默认 `latest`，两个客户端连着同一个会话，窗口就跟着最近活动的那个来回改尺寸；
+  更实际的问题是**手机在主页点一下窗口，电脑上那块屏跟着一起切走**。
+  分组会话（`new-session -t`）共享窗口集合，但**各有各的当前窗口和尺寸**，两条一起解决。
+
+  - **按需触发**：attach 前先在服务端看一眼这个会话上有没有别的客户端，没有就直连原会话，
+    **零足迹**——没人跟你抢的时候多一个会话纯属在用户的 `tmux ls` 里添乱。
+  - 镜像带 `destroy-unattached on`，手机一 detach 它自己就没了，窗口留在原会话里，
+    原会话不受任何影响；镜像也不会出现在主页的会话列表里（原会话被 kill 掉的孤儿镜像除外——
+    那时它是那些窗口仅剩的入口）。
+  - 侧通道的 `select-window` / `new-window` 跟着打到镜像上。顺带修掉一个目标歧义：
+    只给一个 `@id` 而不带会话前缀，在成组时 tmux 会挑「最近活动的那个会话」，切到谁头上全看运气。
+  - 会话的「已连接」标记改按**组内客户端数**算，否则手机明明连着，原会话那行却显示「未连接」。
+
+  **仍然做不到的**：两边同时盯着**同一个窗口**时尺寸照样互抢——一个窗口只有一份字符网格，
+  能选的只有「谁赢」，选不了「各看各的」。镜像只在两边不在同一个窗口时才真正互不干扰。
+
 ## [0.1.56] - 2026-08-25
 
 ### Added
@@ -984,7 +1005,7 @@
 - **不内置字体**：终端使用系统等宽字体，CJK 走系统回退。相比 PRD 原计划的内置
   JetBrains Mono，省掉约 1MB 体积与 OFL 保留字体名称条款的合规讨论。
 
-[Unreleased]: https://cnb.cool/ninvfeng/lighttools/lightmux/-/compare/v0.1.55...main
+[Unreleased]: https://cnb.cool/ninvfeng/lighttools/lightmux/-/compare/v0.1.57...main
 [0.1.17]: https://cnb.cool/ninvfeng/lighttools/lightmux/-/compare/v0.1.16...v0.1.17
 [0.1.16]: https://cnb.cool/ninvfeng/lighttools/lightmux/-/compare/v0.1.15...v0.1.16
 [0.1.15]: https://cnb.cool/ninvfeng/lighttools/lightmux/-/compare/v0.1.14...v0.1.15

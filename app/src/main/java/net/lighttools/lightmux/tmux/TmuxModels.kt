@@ -11,8 +11,16 @@ data class TmuxSession(
     val name: String,
     /** tmux 自报的窗口数。可能比 [windows] 多——列窗口和列会话之间会话可能刚被改动 */
     val windowCount: Int,
-    /** 附加在这个会话上的客户端数 */
+    /**
+     * 附加在这个会话上的客户端数。
+     *
+     * 会话在组里时取的是**全组**的客户端数：本 app 的镜像会话（见 [Tmux.mirrorName]）
+     * 会把手机那个客户端算在镜像头上，只看自己的话原会话会显示成「没人连」，
+     * 而用户明明正连着它。
+     */
     val attachedClients: Int,
+    /** 在某个会话组里。组是本 app 建镜像的产物，也可能是用户自己 `new-session -t` 建的 */
+    val grouped: Boolean = false,
     val windows: List<TmuxWindow> = emptyList(),
 ) {
     val attached: Boolean get() = attachedClients > 0

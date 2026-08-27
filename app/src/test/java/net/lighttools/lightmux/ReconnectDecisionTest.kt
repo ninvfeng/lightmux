@@ -7,8 +7,11 @@ import net.lighttools.lightmux.ssh.CredentialLostException
 import net.lighttools.lightmux.ssh.HostKeyChangedException
 import net.lighttools.lightmux.ssh.ProxyJumpException
 import net.lighttools.lightmux.ssh.UnsupportedKeyFormatException
+import net.lighttools.lightmux.tmux.Tmux
 import net.schmizz.sshj.userauth.UserAuthException
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.IOException
 import java.net.SocketTimeoutException
@@ -115,27 +118,22 @@ class ReconnectDecisionTest {
     @Test
     fun `tmux 会话重连时不带 -D，绝不踢掉别的客户端`() {
         // 手机断线是常态，自动重连要是带 -D，用户电脑上的 tmux 每断一次就被 detach 一次
-        assertEquals(
-            "tmux new-session -A -s 'dev'",
-            reconnectLoginCommand(tmuxSession = "dev", loginCommand = "tmux new-session -A -s 'dev'"),
-        )
+        val cmd = reconnectLoginCommand(tmuxSession = "dev", loginCommand = "tmux new-session -A -s 'dev'")
+        assertFalse(cmd!!.contains("-D"))
+        assertEquals(Tmux.attachCommand("dev"), cmd)
     }
 
     @Test
     fun `从窗口进来的会话重连时回到纯 attach`() {
         // 进来时那条命令带着 select-window，重连不该再切一次窗口：用户可能已经手动换过窗口了
-        assertEquals(
-            "tmux new-session -A -s 'dev'",
-            reconnectLoginCommand("dev", "tmux select-window -t '@3' 2>/dev/null; tmux new-session -A -s 'dev'"),
-        )
+        val cmd = reconnectLoginCommand("dev", Tmux.attachWindowCommand("dev", "@3", "1234"))
+        assertFalse(cmd!!.contains("select-window"))
+        assertEquals(Tmux.attachCommand("dev"), cmd)
     }
 
     @Test
     fun `会话名里的引号在重连命令里仍被转义`() {
-        assertEquals(
-            "tmux new-session -A -s 'it'\\''s mine'",
-            reconnectLoginCommand("it's mine", null),
-        )
+        assertTrue(reconnectLoginCommand("it's mine", null)!!.endsWith("tmux new-session -A -s 'it'\\''s mine'"))
     }
 
     @Test
