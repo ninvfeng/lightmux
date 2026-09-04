@@ -320,7 +320,7 @@ internal fun QuickKeyCap(
 
 /** 键帽上的字。宽标签（`PgDn`、自定义的 `claude`）靠 [KeyCapFrame] 的最小尺寸自己撑开。 */
 @Composable
-private fun CapLabel(label: String, active: Boolean, widthDp: Int) {
+internal fun CapLabel(label: String, active: Boolean, widthDp: Int) {
     Text(
         text = label,
         modifier = Modifier.padding(horizontal = QuickKeySize.labelPadDp(widthDp).dp),
@@ -339,7 +339,7 @@ private fun CapIcon(icon: ImageVector, contentDescription: String, widthDp: Int)
 
 /** 键帽的壳。尺寸是**下限**不是定值：`PgDn` 这类宽标签自己撑开，不会被裁字。 */
 @Composable
-private fun KeyCapFrame(
+internal fun KeyCapFrame(
     widthDp: Int,
     active: Boolean = false,
     onClick: (() -> Unit)? = null,

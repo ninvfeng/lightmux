@@ -9,6 +9,48 @@ import org.junit.Test
 
 class KeyNotationTest {
 
+    /** 弹窗里点出来的序列经 [KeyNotation.format] 落盘、再经 parse 读回，一击都不能变样。 */
+    @Test
+    fun `format 与 parse 互逆`() {
+        val strokes = listOf(
+            KeyStroke(char = 'b', ctrl = true),
+            KeyStroke(char = 'd'),
+            KeyStroke(char = '.', alt = true),
+            KeyStroke(char = 'x', ctrl = true, alt = true, shift = true),
+            KeyStroke(char = ' '),
+            KeyStroke(char = ' ', ctrl = true),
+            KeyStroke(char = '-', ctrl = true),
+            KeyStroke(char = '^'),
+            KeyStroke(named = NamedKey.Tab, shift = true),
+            KeyStroke(named = NamedKey.Up, ctrl = true),
+            KeyStroke(named = NamedKey.Enter),
+        ) + NamedKey.entries.map { KeyStroke(named = it) }
+        assertEquals(strokes, KeyNotation.parse(KeyNotation.format(strokes)))
+    }
+
+    @Test
+    fun `format 用的是键帽上的短写`() {
+        assertEquals(
+            "C-b d M-. Space S-Tab C-Up Esc PgUp Del BS Ins F12",
+            KeyNotation.format(
+                listOf(
+                    KeyStroke(char = 'b', ctrl = true),
+                    KeyStroke(char = 'd'),
+                    KeyStroke(char = '.', alt = true),
+                    KeyStroke(char = ' '),
+                    KeyStroke(named = NamedKey.Tab, shift = true),
+                    KeyStroke(named = NamedKey.Up, ctrl = true),
+                    KeyStroke(named = NamedKey.Escape),
+                    KeyStroke(named = NamedKey.PageUp),
+                    KeyStroke(named = NamedKey.Delete),
+                    KeyStroke(named = NamedKey.Backspace),
+                    KeyStroke(named = NamedKey.Insert),
+                    KeyStroke(named = NamedKey.F12),
+                ),
+            ),
+        )
+    }
+
     @Test
     fun `单字符就是那个字符`() {
         assertEquals(listOf(KeyStroke(char = 'd')), KeyNotation.parse("d"))

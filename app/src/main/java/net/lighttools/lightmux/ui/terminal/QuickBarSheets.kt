@@ -12,6 +12,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
@@ -26,6 +29,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.InputChip
+import androidx.compose.material3.InputChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -41,15 +46,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import net.lighttools.lightmux.R
 import net.lighttools.lightmux.data.KeyNotation
+import net.lighttools.lightmux.data.KeyStroke
+import net.lighttools.lightmux.data.NamedKey
 import net.lighttools.lightmux.data.QuickBar
 import net.lighttools.lightmux.data.QuickCommand
 import net.lighttools.lightmux.data.QuickCustomKey
 import net.lighttools.lightmux.data.QuickCustomKeys
 import net.lighttools.lightmux.data.QuickKey
+import net.lighttools.lightmux.data.QuickKeySize
 import net.lighttools.lightmux.data.QuickSlot
 import net.lighttools.lightmux.ui.common.DragHandle
 import net.lighttools.lightmux.ui.common.rememberReorderState
@@ -352,8 +361,7 @@ fun QuickKeysSheet(
  *
  * 「文本 / 按键」两种模式：预设表里的组合键只有 `^C` 那一批，tmux 用户真正想顶到栏上的
  * 是 `C-b d`、`C-b 1` 这种带前缀的两击——文本模式发不出来，按键模式一格发完。
- * 序列在这里就校验（[KeyNotation.parse]），认不出的键名不让保存：存进去才发现发不出来，
- * 用户根本不知道错在哪一格。
+ * 按键模式是点选而不是手写记法：记法只是落盘格式（[KeyNotation.format]），用户不必学它。
  */
 @Composable
 private fun CustomKeyDialog(
@@ -363,16 +371,23 @@ private fun CustomKeyDialog(
     onDismiss: () -> Unit,
 ) {
     var label by rememberSaveable(initial) { mutableStateOf(initial.label) }
-    var text by rememberSaveable(initial) { mutableStateOf(initial.text) }
+    var text by rememberSaveable(initial) { mutableStateOf(if (initial.keys) "" else initial.text) }
     var enter by rememberSaveable(initial) { mutableStateOf(initial.enter) }
     var keys by rememberSaveable(initial) { mutableStateOf(initial.keys) }
-    val invalidKeys = keys && text.isNotBlank() && KeyNotation.parse(text) == null
+    // 不用 rememberSaveable：List<KeyStroke> 得配 Saver，而弹窗本来就短命，转屏丢一次编辑中的序列可以接受
+    var strokes by remember(initial) {
+        mutableStateOf(if (initial.keys) KeyNotation.parse(initial.text).orEmpty() else emptyList())
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // 按键模式下面铺了近三十个键帽，小屏上一屏放不下
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
                         selected = !keys,
@@ -391,20 +406,16 @@ private fun CustomKeyDialog(
                     label = { Text(stringResource(R.string.quick_key_custom_label)) },
                     singleLine = true,
                 )
-                OutlinedTextField(
-                    value = text,
-                    onValueChange = { text = it },
-                    label = {
-                        Text(stringResource(if (keys) R.string.quick_key_custom_keys else R.string.quick_key_custom_text))
-                    },
-                    supportingText = if (keys) {
-                        { Text(stringResource(if (invalidKeys) R.string.quick_key_keys_invalid else R.string.quick_key_keys_hint)) }
-                    } else null,
-                    isError = invalidKeys,
-                    singleLine = true,
-                )
-                // 序列模式下回车由用户写在序列里（`Enter`），再给开关只会让人猜两者谁先谁后
-                if (!keys) {
+                if (keys) {
+                    KeySequenceEditor(strokes = strokes, onChange = { strokes = it })
+                } else {
+                    OutlinedTextField(
+                        value = text,
+                        onValueChange = { text = it },
+                        label = { Text(stringResource(R.string.quick_key_custom_text)) },
+                        singleLine = true,
+                    )
+                    // 序列模式下回车由用户点进序列里（`Enter`），再给开关只会让人猜两者谁先谁后
                     EnterOnTapRow(checked = enter, onCheckedChange = { enter = it })
                 }
             }
@@ -412,13 +423,102 @@ private fun CustomKeyDialog(
         confirmButton = {
             TextButton(
                 onClick = {
-                    onConfirm(initial.copy(label = label.trim(), text = text.trim(), enter = enter && !keys, keys = keys))
+                    onConfirm(
+                        if (keys) {
+                            initial.copy(label = label.trim(), text = KeyNotation.format(strokes), enter = false, keys = true)
+                        } else {
+                            initial.copy(label = label.trim(), text = text.trim(), enter = enter, keys = false)
+                        },
+                    )
                 },
-                enabled = label.isNotBlank() && text.isNotBlank() && !invalidKeys,
+                enabled = label.isNotBlank() && if (keys) strokes.isNotEmpty() else text.isNotBlank(),
             ) { Text(stringResource(R.string.ok)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
     )
+}
+
+/**
+ * 按键序列的点选编辑器：已选序列一排 chip（点即移除），下面是修饰键开关、字符输入框和具名键键帽。
+ *
+ * 修饰键是粘滞的，语义同终端栏上的 Ctrl/Alt：勾上后**下一击**带上它，加完自动清掉——
+ * 序列里绝大多数是 `C-b` 后面跟一个裸键，让 Ctrl 一直亮着会把后面那个 `d` 也变成 `C-d`。
+ */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun KeySequenceEditor(strokes: List<KeyStroke>, onChange: (List<KeyStroke>) -> Unit) {
+    var ctrl by remember { mutableStateOf(false) }
+    var alt by remember { mutableStateOf(false) }
+    var shift by remember { mutableStateOf(false) }
+
+    fun add(named: NamedKey? = null, char: Char? = null) {
+        onChange(strokes + KeyStroke(named = named, char = char, ctrl = ctrl, alt = alt, shift = shift))
+        ctrl = false
+        alt = false
+        shift = false
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = stringResource(R.string.quick_key_custom_keys),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (strokes.isEmpty()) {
+            Text(
+                text = stringResource(R.string.quick_key_seq_empty),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                strokes.forEachIndexed { index, stroke ->
+                    InputChip(
+                        selected = false,
+                        onClick = { onChange(strokes.without(index)) },
+                        label = {
+                            Text(KeyNotation.format(listOf(stroke)), fontFamily = FontFamily.Monospace)
+                        },
+                        trailingIcon = {
+                            Icon(
+                                Icons.Filled.Close,
+                                stringResource(R.string.remove),
+                                modifier = Modifier.size(InputChipDefaults.IconSize),
+                            )
+                        },
+                    )
+                }
+            }
+        }
+        // 键名是键盘上印的字，不进 strings
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = ctrl, onClick = { ctrl = !ctrl }, label = { Text("Ctrl") })
+            FilterChip(selected = alt, onClick = { alt = !alt }, label = { Text("Alt") })
+            FilterChip(selected = shift, onClick = { shift = !shift }, label = { Text("Shift") })
+        }
+        // 输入框只当「敲一下」用，值恒为空：敲进来的字符立刻变成一击，输入法的联想与纠错都关掉
+        OutlinedTextField(
+            value = "",
+            onValueChange = { typed -> typed.lastOrNull { !it.isWhitespace() }?.let { add(char = it) } },
+            label = { Text(stringResource(R.string.quick_key_char)) },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii, autoCorrectEnabled = false),
+        )
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            NamedKey.entries.forEach { key ->
+                KeyCapFrame(widthDp = QuickKeySize.SHEET_WIDTH_DP, onClick = { add(named = key) }) {
+                    CapLabel(key.label, active = false, widthDp = QuickKeySize.SHEET_WIDTH_DP)
+                }
+            }
+            // 空格在输入框里被当空白吞掉了，单独给一格
+            KeyCapFrame(widthDp = QuickKeySize.SHEET_WIDTH_DP, onClick = { add(char = ' ') }) {
+                CapLabel("Space", active = false, widthDp = QuickKeySize.SHEET_WIDTH_DP)
+            }
+        }
+    }
 }
 
 @Composable

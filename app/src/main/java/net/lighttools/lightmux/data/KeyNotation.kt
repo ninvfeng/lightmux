@@ -3,33 +3,34 @@ package net.lighttools.lightmux.data
 /**
  * 按键序列里认得的具名键。
  *
- * 名字沿用 tmux `send-keys` 那套（`Enter` `Escape` `DC` `PPage`…），用 tmux 的人不用再学一份；
- * 顺带收下本 app 键帽上的写法（`Ent` `Esc` `PgUp` `Del`）与几个常见全拼，认起来不区分大小写。
+ * [label] 是键帽上画的字，也是 [KeyNotation.format] 写盘用的名字——挑的是键帽上放得下的短写
+ * （`Esc` `PgUp` `Del`）。名字沿用 tmux `send-keys` 那套（`Enter` `Escape` `DC` `PPage`…），
+ * 用 tmux 的人不用再学一份；别名连同 [label] 一起认，不区分大小写。
  * 键码映射放 UI 层：这一层不引 Android，好让解析器跟着单测跑。
  */
-enum class NamedKey(private vararg val aliases: String) {
-    Enter("enter", "ent", "return"),
-    Escape("escape", "esc"),
-    Tab("tab"),
-    Backspace("bspace", "backspace", "bs"),
-    Delete("dc", "delete", "del"),
-    Insert("ic", "insert", "ins"),
-    Home("home"),
-    End("end"),
-    PageUp("pgup", "pageup", "ppage"),
-    PageDown("pgdn", "pagedown", "npage"),
-    Up("up"),
-    Down("down"),
-    Left("left"),
-    Right("right"),
-    F1("f1"), F2("f2"), F3("f3"), F4("f4"), F5("f5"), F6("f6"),
-    F7("f7"), F8("f8"), F9("f9"), F10("f10"), F11("f11"), F12("f12"),
+enum class NamedKey(val label: String, private vararg val aliases: String) {
+    Enter("Enter", "ent", "return"),
+    Escape("Esc", "escape"),
+    Tab("Tab"),
+    Backspace("BS", "bspace", "backspace"),
+    Delete("Del", "dc", "delete"),
+    Insert("Ins", "ic", "insert"),
+    Home("Home"),
+    End("End"),
+    PageUp("PgUp", "pageup", "ppage"),
+    PageDown("PgDn", "pagedown", "npage"),
+    Up("Up"),
+    Down("Down"),
+    Left("Left"),
+    Right("Right"),
+    F1("F1"), F2("F2"), F3("F3"), F4("F4"), F5("F5"), F6("F6"),
+    F7("F7"), F8("F8"), F9("F9"), F10("F10"), F11("F11"), F12("F12"),
     ;
 
     companion object {
         fun of(name: String): NamedKey? {
             val lower = name.lowercase()
-            return entries.firstOrNull { lower in it.aliases }
+            return entries.firstOrNull { lower == it.label.lowercase() || lower in it.aliases }
         }
     }
 }
@@ -56,8 +57,21 @@ data class KeyStroke(
  *
  * 认不出的 token 让整条序列返回 `null`，而不是跳过它：一条 `C-b d` 少发了半截，
  * 后果是 `d` 单独打进了 shell——沉默地做一半比什么都不做更糟。
+ *
+ * 用户不手写这套记法（0.1.59 起弹窗里是点选的），它只是落盘格式：[format] 与 [parse] 互逆。
+ * 仍然留着可读的文本而不换成二进制，是为了管理表里能直接把 `C-b d` 展示出来。
  */
 object KeyNotation {
+
+    fun format(strokes: List<KeyStroke>): String = strokes.joinToString(" ") { stroke ->
+        val mods = buildString {
+            if (stroke.ctrl) append("C-")
+            if (stroke.alt) append("M-")
+            if (stroke.shift) append("S-")
+        }
+        val key = stroke.named?.label ?: if (stroke.char == ' ') "Space" else stroke.char.toString()
+        mods + key
+    }
 
     fun parse(text: String): List<KeyStroke>? {
         val tokens = text.trim().split(WHITESPACE).filter { it.isNotEmpty() }

@@ -6,6 +6,16 @@
 
 ## [Unreleased]
 
+## [0.1.59] - 2026-09-04
+
+### Changed
+
+- **自定义键的「按键」模式改成点选**，不再要求手写 `C-b d` 这套记法。弹窗里是 Ctrl / Alt / Shift
+  三个开关（语义同终端里的粘滞修饰键：勾上后下一次加键带上，加完自动清掉）、一排具名键与 F 键的键帽、
+  一个只收一个字符的输入框；已选的序列以 chip 展示，点一下移除。
+  - tmux 记法退成落盘格式（`format` / `parse` 互逆），管理表里仍按 `C-b d` 这样展示，0.1.58 存的键原样可用。
+  - 手写入口撤掉后「认不出的键名」不再可能发生，相应的提示文案一并删除。
+
 ## [0.1.58] - 2026-09-04
 
 ### Added
@@ -1017,7 +1027,8 @@
 - **不内置字体**：终端使用系统等宽字体，CJK 走系统回退。相比 PRD 原计划的内置
   JetBrains Mono，省掉约 1MB 体积与 OFL 保留字体名称条款的合规讨论。
 
-[Unreleased]: https://cnb.cool/ninvfeng/lighttools/lightmux/-/compare/v0.1.58...main
+[Unreleased]: https://cnb.cool/ninvfeng/lighttools/lightmux/-/compare/v0.1.59...main
+[0.1.59]: https://cnb.cool/ninvfeng/lighttools/lightmux/-/compare/v0.1.58...v0.1.59
 [0.1.58]: https://cnb.cool/ninvfeng/lighttools/lightmux/-/compare/v0.1.57...v0.1.58
 [0.1.17]: https://cnb.cool/ninvfeng/lighttools/lightmux/-/compare/v0.1.16...v0.1.17
 [0.1.16]: https://cnb.cool/ninvfeng/lighttools/lightmux/-/compare/v0.1.15...v0.1.16
