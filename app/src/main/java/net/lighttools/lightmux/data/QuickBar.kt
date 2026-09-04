@@ -76,12 +76,17 @@ enum class QuickKey(val id: String, val label: String? = null, val ctrlChar: Cha
  * [id] 是落盘用的稳定标识，形如 `u1`；与 [QuickKey.id] 不会撞，预设 id 里没有「u + 纯数字」。
  * [enter] 是「按下即执行」：默认不勾（只填不回车，与快捷命令表一致，误触跑到线上机器代价太高），
  * 但一级快捷键的意义本就在于一按就跑，所以给开关而不替用户定死。
+ *
+ * [keys] 为真时 [text] 不是字面文本而是**按键序列**（[KeyNotation] 记法，`C-b d`、`M-x`、`F5`）：
+ * 预设表里的组合键只有 `^C` 那一批，而 tmux 用户真正想顶到栏上的是 `C-b d`、`C-b 1` 这种
+ * 带前缀的两击——序列模式一格发完。此时 [enter] 无意义（序列里自己写 `Enter`），落盘固定为 false。
  */
 data class QuickCustomKey(
     val id: String,
     val label: String,
     val text: String,
     val enter: Boolean = false,
+    val keys: Boolean = false,
 )
 
 /**
@@ -105,7 +110,9 @@ sealed interface QuickSlot {
 /**
  * 自定义键的存取。
  *
- * 一行一条，字段用 TAB 分隔：`id \t enter \t label \t text`。
+ * 一行一条，字段用 TAB 分隔：`id \t 模式 \t label \t text`。
+ * 模式一格：`0` 只填、`1` 填完回车、`k` 按键序列——挤在原来的 enter 标志位里而不另加字段，
+ * 降级到 0.1.57 及之前的版本时文本键原样可用，序列键最多退化成「把记法当文本填进去」。
  * **要发送的文本放行尾**，从行尾反解——它是唯一可能含奇怪字符的字段（同 tmux 侧通道那条纪律）。
  * TAB 和换行在落盘前压成空格，否则一条会被读成两条或串行。
  */
@@ -115,6 +122,7 @@ object QuickCustomKeys {
     const val MAX_LABEL_LENGTH = 12
 
     private const val ID_PREFIX = "u"
+    private const val MODE_KEYS = "k"
 
     fun decode(raw: String?): List<QuickCustomKey> = raw?.lines().orEmpty().mapNotNull { line ->
         val parts = line.split('\t', limit = 4)
@@ -122,8 +130,9 @@ object QuickCustomKeys {
         val id = parts[0].trim()
         val label = parts[2].trim()
         val text = parts[3].trim()
+        val mode = parts[1].trim()
         if (id.isEmpty() || label.isEmpty() || text.isEmpty()) null
-        else QuickCustomKey(id = id, label = label, text = text, enter = parts[1].trim() == "1")
+        else QuickCustomKey(id = id, label = label, text = text, enter = mode == "1", keys = mode == MODE_KEYS)
     }.distinctBy { it.id }
 
     fun encode(keys: List<QuickCustomKey>): String = keys
@@ -133,8 +142,13 @@ object QuickCustomKeys {
             val id = key.id.flatten().replace(",", "")
             val label = key.label.flatten().take(MAX_LABEL_LENGTH)
             val text = key.text.flatten()
+            val mode = when {
+                key.keys -> MODE_KEYS
+                key.enter -> "1"
+                else -> "0"
+            }
             if (id.isEmpty() || label.isEmpty() || text.isEmpty()) null
-            else "$id\t${if (key.enter) "1" else "0"}\t$label\t$text"
+            else "$id\t$mode\t$label\t$text"
         }
         .joinToString("\n")
 

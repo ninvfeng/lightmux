@@ -70,6 +70,11 @@
     <string name="quick_key_custom_add">Add custom key</string>
     <string name="quick_key_custom_label">Key cap</string>
     <string name="quick_key_custom_text">Text to send</string>
+    <string name="quick_key_mode_text">Text</string>
+    <string name="quick_key_mode_keys">Keys</string>
+    <string name="quick_key_custom_keys">Key sequence</string>
+    <string name="quick_key_keys_hint">Space-separated, e.g. C-b d · M-x · F5 · Up · Enter</string>
+    <string name="quick_key_keys_invalid">Unrecognized key name</string>
     <string name="quick_enter_on_tap">Run on tap (send Enter)</string>
     <string name="reorder">Drag to reorder</string>
     <string name="remove">Remove</string>

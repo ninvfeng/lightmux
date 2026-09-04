@@ -9,6 +9,7 @@ import net.lighttools.lightmux.data.QuickKey
 import net.lighttools.lightmux.data.QuickKeySize
 import net.lighttools.lightmux.data.QuickSlot
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -230,6 +231,36 @@ class QuickBarTest {
             widths.map { QuickKeySize.capHeightDp(it) },
         )
         assertTrue(QuickKeySize.gapDp(QuickKeySize.MAX_WIDTH_DP) - QuickKeySize.gapDp(QuickKeySize.MIN_WIDTH_DP) >= 3)
+    }
+
+    @Test
+    fun `按键序列开关原样往返`() {
+        val key = QuickCustomKey("u1", "dt", "C-b d", keys = true)
+        val decoded = QuickCustomKeys.decode(QuickCustomKeys.encode(listOf(key))).single()
+        assertTrue(decoded.keys)
+        assertFalse(decoded.enter)
+        assertEquals("C-b d", decoded.text)
+    }
+
+    /**
+     * 模式挤在原来的回车标志位里：`k` 序列、`1` 回车、`0` 只填。
+     *
+     * 降级到 0.1.57 及之前的版本时那一格读不出 `k` 就当「不回车」，序列键最多退化成把记法填进去，
+     * 不会变成「点一下就跑」。
+     */
+    @Test
+    fun `模式字段按序列回车只填三档落盘`() {
+        assertEquals("u1\tk\tdt\tC-b d", QuickCustomKeys.encode(listOf(QuickCustomKey("u1", "dt", "C-b d", keys = true))))
+        assertEquals("u2\t1\tc1\tclaude", QuickCustomKeys.encode(listOf(QuickCustomKey("u2", "c1", "claude", enter = true))))
+        assertEquals("u3\t0\tgs\tgit status", QuickCustomKeys.encode(listOf(QuickCustomKey("u3", "gs", "git status"))))
+    }
+
+    @Test
+    fun `模式为 k 的行读成按键序列`() {
+        val key = QuickCustomKeys.decode("u1\tk\tdt\tC-b d").single()
+        assertTrue(key.keys)
+        assertFalse(key.enter)
+        assertEquals("C-b d", key.text)
     }
 
     private fun slotsOf(vararg keys: QuickKey): List<QuickSlot> = keys.map(QuickSlot::Preset)

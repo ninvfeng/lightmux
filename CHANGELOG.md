@@ -6,6 +6,18 @@
 
 ## [Unreleased]
 
+## [0.1.58] - 2026-09-04
+
+### Added
+
+- **自定义键支持「按键序列」模式**。此前自定义键只能发一串文本，组合键只有预设的 `^C` `^D` `^B` 那一批；
+  现在添加自定义键时可选「按键」，内容按 tmux 记法写、空格分隔：`C-b d`（detach）、`C-b 1`（切窗口）、
+  `M-.`（readline 上一个参数）、`F5`、`Up Up Enter`。修饰键 `C-` `M-` `S-` 可叠加，`^b` 等价 `C-b`，
+  具名键认 tmux 的 `Enter` `Escape` `DC` `PPage` 与键帽上的 `Ent` `Esc` `Del` `PgUp`，不区分大小写。
+  - 有认不出的键名整条不发、弹窗里直接标红，不会「发了半截」把 `d` 单独打进 shell。
+  - 序列里每一击的修饰键都是写明的，粘滞 `Ctrl`/`Alt` 不叠加上去。
+  - 落盘格式沿用原来的标志位（`0`/`1`/`k`），降级到旧版本时文本键原样可用。
+
 ## [0.1.57] - 2026-08-27
 
 ### Changed
@@ -1005,7 +1017,8 @@
 - **不内置字体**：终端使用系统等宽字体，CJK 走系统回退。相比 PRD 原计划的内置
   JetBrains Mono，省掉约 1MB 体积与 OFL 保留字体名称条款的合规讨论。
 
-[Unreleased]: https://cnb.cool/ninvfeng/lighttools/lightmux/-/compare/v0.1.57...main
+[Unreleased]: https://cnb.cool/ninvfeng/lighttools/lightmux/-/compare/v0.1.58...main
+[0.1.58]: https://cnb.cool/ninvfeng/lighttools/lightmux/-/compare/v0.1.57...v0.1.58
 [0.1.17]: https://cnb.cool/ninvfeng/lighttools/lightmux/-/compare/v0.1.16...v0.1.17
 [0.1.16]: https://cnb.cool/ninvfeng/lighttools/lightmux/-/compare/v0.1.15...v0.1.16
 [0.1.15]: https://cnb.cool/ninvfeng/lighttools/lightmux/-/compare/v0.1.14...v0.1.15

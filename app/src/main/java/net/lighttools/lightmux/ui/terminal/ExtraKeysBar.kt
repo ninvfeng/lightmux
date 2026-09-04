@@ -45,6 +45,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import net.lighttools.lightmux.R
 import net.lighttools.lightmux.data.QuickCommand
+import net.lighttools.lightmux.data.KeyNotation
 import net.lighttools.lightmux.data.QuickCustomKey
 import net.lighttools.lightmux.data.QuickKey
 import net.lighttools.lightmux.data.QuickKeySize
@@ -195,7 +196,9 @@ fun ExtraKeysBar(
 }
 
 /**
- * 一格做什么。自定义键就是「把那串文本送进终端」，勾了 [QuickCustomKey.enter] 再补一个回车。
+ * 一格做什么。自定义键就是「把那串文本送进终端」，勾了 [QuickCustomKey.enter] 再补一个回车；
+ * 序列模式（[QuickCustomKey.keys]）则逐击发出。解析不过的序列**什么都不发**——
+ * 存盘前弹窗已经拦过一道，走到这里的只会是别处写坏的数据，发半截比不发更糟。
  *
  * 走 [TerminalHostState.sendText] 而不是逐字符发：文本里的 `-`、`|` 不该被粘滞 Ctrl 改写。
  */
@@ -209,7 +212,9 @@ private fun QuickSlot.dispatch(
     when (this) {
         is QuickSlot.Preset -> key.dispatch(state, onBack, onFiles, onForward, onCommands)
 
-        is QuickSlot.Custom -> {
+        is QuickSlot.Custom -> if (key.keys) {
+            KeyNotation.parse(key.text)?.let(state::sendKeys)
+        } else {
             state.sendText(key.text)
             if (key.enter) state.sendKeyCode(KeyEvent.KEYCODE_ENTER)
         }

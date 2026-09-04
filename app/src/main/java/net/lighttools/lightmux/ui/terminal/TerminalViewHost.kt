@@ -31,7 +31,11 @@ import com.termux.view.TerminalViewClient
 import kotlinx.coroutines.launch
 import net.lighttools.lightmux.LightmuxApp
 import net.lighttools.lightmux.R
+import com.termux.terminal.KeyHandler
 import net.lighttools.lightmux.data.AppSettings
+import net.lighttools.lightmux.data.KeyNotation
+import net.lighttools.lightmux.data.KeyStroke
+import net.lighttools.lightmux.data.NamedKey
 import net.lighttools.lightmux.session.TermSessionHandle
 import kotlin.math.roundToInt
 
@@ -132,6 +136,30 @@ class TerminalHostState(
         if (v.isSelectingText) v.stopTextSelectionMode()
         v.inputCodePoint(c.code, true, modifiers.alt)
         modifiers = modifiers.consumed()
+    }
+
+    /**
+     * 自定义键的按键序列（[KeyNotation]）：逐击发出，修饰键全按序列里写明的来。
+     *
+     * 粘滞键**不叠加**到序列上——`C-b d` 的每一击发什么是用户写死的，叠上去等于改写他的意思；
+     * 但照样清掉（同 [sendCtrlChar]）。具名键走 [TerminalView.handleKeyCode]，让 `C-Up` `M-Left`
+     * 这类带修饰的方向键由 [KeyHandler] 拼出 `\033[1;5A`；字符走 [TerminalView.inputCodePoint]，
+     * Ctrl 的字符变换与 Alt 的 ESC 前缀都在那一层。
+     */
+    fun sendKeys(strokes: List<KeyStroke>) {
+        val v = view ?: return
+        if (v.mEmulator == null) return
+        if (v.isSelectingText) v.stopTextSelectionMode()
+        modifiers = StickyModifiers.NONE
+        strokes.forEach { stroke ->
+            val named = stroke.named
+            if (named != null) {
+                v.handleKeyCode(named.keyCode(), stroke.keyMod())
+            } else {
+                val c = stroke.char ?: return@forEach
+                v.inputCodePoint((if (stroke.shift) c.uppercaseChar() else c).code, stroke.ctrl, stroke.alt)
+            }
+        }
     }
 
     /**
@@ -407,6 +435,41 @@ fun TerminalViewHost(state: TerminalHostState, modifier: Modifier = Modifier) {
         onDispose { state.handle.client = null }
     }
 }
+
+/** [NamedKey] 到 Android keyCode。映射放这一层，解析器那边才不用引 Android。 */
+private fun NamedKey.keyCode(): Int = when (this) {
+    NamedKey.Enter -> KeyEvent.KEYCODE_ENTER
+    NamedKey.Escape -> KeyEvent.KEYCODE_ESCAPE
+    NamedKey.Tab -> KeyEvent.KEYCODE_TAB
+    NamedKey.Backspace -> KeyEvent.KEYCODE_DEL
+    NamedKey.Delete -> KeyEvent.KEYCODE_FORWARD_DEL
+    NamedKey.Insert -> KeyEvent.KEYCODE_INSERT
+    NamedKey.Home -> KeyEvent.KEYCODE_MOVE_HOME
+    NamedKey.End -> KeyEvent.KEYCODE_MOVE_END
+    NamedKey.PageUp -> KeyEvent.KEYCODE_PAGE_UP
+    NamedKey.PageDown -> KeyEvent.KEYCODE_PAGE_DOWN
+    NamedKey.Up -> KeyEvent.KEYCODE_DPAD_UP
+    NamedKey.Down -> KeyEvent.KEYCODE_DPAD_DOWN
+    NamedKey.Left -> KeyEvent.KEYCODE_DPAD_LEFT
+    NamedKey.Right -> KeyEvent.KEYCODE_DPAD_RIGHT
+    NamedKey.F1 -> KeyEvent.KEYCODE_F1
+    NamedKey.F2 -> KeyEvent.KEYCODE_F2
+    NamedKey.F3 -> KeyEvent.KEYCODE_F3
+    NamedKey.F4 -> KeyEvent.KEYCODE_F4
+    NamedKey.F5 -> KeyEvent.KEYCODE_F5
+    NamedKey.F6 -> KeyEvent.KEYCODE_F6
+    NamedKey.F7 -> KeyEvent.KEYCODE_F7
+    NamedKey.F8 -> KeyEvent.KEYCODE_F8
+    NamedKey.F9 -> KeyEvent.KEYCODE_F9
+    NamedKey.F10 -> KeyEvent.KEYCODE_F10
+    NamedKey.F11 -> KeyEvent.KEYCODE_F11
+    NamedKey.F12 -> KeyEvent.KEYCODE_F12
+}
+
+private fun KeyStroke.keyMod(): Int =
+    (if (ctrl) KeyHandler.KEYMOD_CTRL else 0) or
+        (if (alt) KeyHandler.KEYMOD_ALT else 0) or
+        (if (shift) KeyHandler.KEYMOD_SHIFT else 0)
 
 /**
  * 终端字体：内置的 JetBrains Mono Regular，取不到才退回系统等宽。

@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -43,6 +44,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import net.lighttools.lightmux.R
+import net.lighttools.lightmux.data.KeyNotation
 import net.lighttools.lightmux.data.QuickBar
 import net.lighttools.lightmux.data.QuickCommand
 import net.lighttools.lightmux.data.QuickCustomKey
@@ -266,9 +268,10 @@ fun QuickKeysSheet(
                     QuickSlotCap(slot)
                     val custom = (slot as? QuickSlot.Custom)?.key
                     if (custom != null) {
-                        // 发什么看不见就等于要靠记，几格自定义键排在一起会分不清谁是谁
+                        // 发什么看不见就等于要靠记，几格自定义键排在一起会分不清谁是谁。
+                        // 序列键前面加个键盘符号：`C-b d` 当文本填进去和当按键发出去是两回事
                         Text(
-                            text = custom.text,
+                            text = if (custom.keys) "⌨ " + custom.text else custom.text,
                             modifier = Modifier.weight(1f).padding(start = 12.dp),
                             fontFamily = FontFamily.Monospace,
                             style = MaterialTheme.typography.bodySmall,
@@ -346,6 +349,11 @@ fun QuickKeysSheet(
  *
  * 键帽与内容分成两栏而不是「拿内容当键帽」：`claude --resume` 画不进一格键，
  * 而 `c1` 这种两个字符的键帽正是用户自己心里那套速记。
+ *
+ * 「文本 / 按键」两种模式：预设表里的组合键只有 `^C` 那一批，tmux 用户真正想顶到栏上的
+ * 是 `C-b d`、`C-b 1` 这种带前缀的两击——文本模式发不出来，按键模式一格发完。
+ * 序列在这里就校验（[KeyNotation.parse]），认不出的键名不让保存：存进去才发现发不出来，
+ * 用户根本不知道错在哪一格。
  */
 @Composable
 private fun CustomKeyDialog(
@@ -357,12 +365,26 @@ private fun CustomKeyDialog(
     var label by rememberSaveable(initial) { mutableStateOf(initial.label) }
     var text by rememberSaveable(initial) { mutableStateOf(initial.text) }
     var enter by rememberSaveable(initial) { mutableStateOf(initial.enter) }
+    var keys by rememberSaveable(initial) { mutableStateOf(initial.keys) }
+    val invalidKeys = keys && text.isNotBlank() && KeyNotation.parse(text) == null
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = !keys,
+                        onClick = { keys = false },
+                        label = { Text(stringResource(R.string.quick_key_mode_text)) },
+                    )
+                    FilterChip(
+                        selected = keys,
+                        onClick = { keys = true },
+                        label = { Text(stringResource(R.string.quick_key_mode_keys)) },
+                    )
+                }
                 OutlinedTextField(
                     value = label,
                     onValueChange = { label = it.take(QuickCustomKeys.MAX_LABEL_LENGTH) },
@@ -372,16 +394,27 @@ private fun CustomKeyDialog(
                 OutlinedTextField(
                     value = text,
                     onValueChange = { text = it },
-                    label = { Text(stringResource(R.string.quick_key_custom_text)) },
+                    label = {
+                        Text(stringResource(if (keys) R.string.quick_key_custom_keys else R.string.quick_key_custom_text))
+                    },
+                    supportingText = if (keys) {
+                        { Text(stringResource(if (invalidKeys) R.string.quick_key_keys_invalid else R.string.quick_key_keys_hint)) }
+                    } else null,
+                    isError = invalidKeys,
                     singleLine = true,
                 )
-                EnterOnTapRow(checked = enter, onCheckedChange = { enter = it })
+                // 序列模式下回车由用户写在序列里（`Enter`），再给开关只会让人猜两者谁先谁后
+                if (!keys) {
+                    EnterOnTapRow(checked = enter, onCheckedChange = { enter = it })
+                }
             }
         },
         confirmButton = {
             TextButton(
-                onClick = { onConfirm(initial.copy(label = label.trim(), text = text.trim(), enter = enter)) },
-                enabled = label.isNotBlank() && text.isNotBlank(),
+                onClick = {
+                    onConfirm(initial.copy(label = label.trim(), text = text.trim(), enter = enter && !keys, keys = keys))
+                },
+                enabled = label.isNotBlank() && text.isNotBlank() && !invalidKeys,
             ) { Text(stringResource(R.string.ok)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },

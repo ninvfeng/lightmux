@@ -65,6 +65,11 @@
     <string name="quick_key_custom_add">添加自定义键</string>
     <string name="quick_key_custom_label">键帽文字</string>
     <string name="quick_key_custom_text">发送内容</string>
+    <string name="quick_key_mode_text">文本</string>
+    <string name="quick_key_mode_keys">按键</string>
+    <string name="quick_key_custom_keys">按键序列</string>
+    <string name="quick_key_keys_hint">空格分隔，如 C-b d · M-x · F5 · Up · Enter</string>
+    <string name="quick_key_keys_invalid">有认不出的键名</string>
     <string name="quick_enter_on_tap">按下即执行（自动回车）</string>
     <string name="reorder">拖动排序</string>
     <string name="remove">移除</string>

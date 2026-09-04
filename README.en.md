@@ -61,6 +61,8 @@ Everything listed here is implemented and shipping.
   `Ctrl` and `Alt` are sticky (tap, then tap the next key) and highlight while armed
 - The bar is yours to arrange: add or drop keys, drag to reorder, resize the caps. One slot holds
   your own quick commands — tap to send a whole command into the terminal, optionally with Enter
+- Custom keys: a cap that sends a string of text, or a key sequence in tmux notation
+  (`C-b d`, `M-.`, `F5`, `Up Up Enter`) — a prefixed two-stroke tmux binding becomes one tap
 
 **Host management**
 - Name, host, port, user, group; password or private key (PEM) authentication
