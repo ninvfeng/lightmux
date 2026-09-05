@@ -95,6 +95,7 @@
     <string name="key_source_paste">Paste below</string>
     <string name="key_source_missing">Key was deleted</string>
     <string name="key_source_managed">Edit this key under Settings › SSH keys. Every host using it picks up the change.</string>
+    <string name="key_source_manage">Manage keys</string>
     <string name="key_pick_file">Choose a file…</string>
     <string name="error_key_file_unreadable">Could not read that file</string>
     <string name="error_key_file_not_a_key">That file is not a private key</string>

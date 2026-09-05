@@ -90,6 +90,7 @@
     <string name="key_source_paste">直接粘贴</string>
     <string name="key_source_missing">密钥已被删除</string>
     <string name="key_source_managed">这把密钥在「设置 › 密钥管理」里改，所有用到它的主机跟着变</string>
+    <string name="key_source_manage">管理密钥</string>
     <string name="key_pick_file">从文件选择…</string>
     <string name="error_key_file_unreadable">这个文件读不了</string>
     <string name="error_key_file_not_a_key">这个文件不是私钥</string>

@@ -273,7 +273,12 @@ fun LightmuxRoot() {
                 val vm = rememberVm("hostEdit:${screen.hostId.orEmpty()}") {
                     HostEditViewModel(app.hostStore, app.keyStore, screen.hostId)
                 }
-                HostEditScreen(vm = vm, onDone = { nav.pop() })
+                // 管理密钥的入口从表单里进来：跳去导完新钥匙回来，表单还在原样
+                HostEditScreen(
+                    vm = vm,
+                    onDone = { nav.pop() },
+                    onOpenKeys = { nav.push(Screen.Keys) },
+                )
             }
 
             is Screen.Monitor -> {

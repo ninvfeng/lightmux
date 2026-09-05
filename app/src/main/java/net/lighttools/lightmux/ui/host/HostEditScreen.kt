@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
@@ -28,6 +29,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -62,6 +64,7 @@ import net.lighttools.lightmux.ui.keys.PickKeyFileButton
 fun HostEditScreen(
     vm: HostEditViewModel,
     onDone: () -> Unit,
+    onOpenKeys: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val form = vm.form
@@ -162,17 +165,17 @@ fun HostEditScreen(
                     }
 
                     AuthKind.PrivateKey -> {
-                        // 密钥库空着的时候不摆一个只有「直接粘贴」一项的选择器；
-                        // 但主机引用的钥匙被删了（keyId 有值却查不到）必须显示，否则用户没有出路。
-                        if (vm.keys.isNotEmpty() || form.keyId != null) {
-                            FieldDivider()
-                            KeySourcePicker(
-                                keys = vm.keys,
-                                selectedId = form.keyId,
-                                onSelect = vm::selectKey,
-                                onUsePasted = vm::usePastedKey,
-                            )
-                        }
+                        // 选择器常驻（不再因为密钥库空着而藏掉）：它现在还背着「管理密钥」的入口，
+                        // 空库时用户正是要从这里跳去导入——藏掉它就断了这条路，只剩一个粘贴框
+                        // 的用户根本不知道这个 app 有密钥管理这回事。
+                        FieldDivider()
+                        KeySourcePicker(
+                            keys = vm.keys,
+                            selectedId = form.keyId,
+                            onSelect = vm::selectKey,
+                            onUsePasted = vm::usePastedKey,
+                            onManage = onOpenKeys,
+                        )
                         if (form.keyId == null) {
                             FieldDivider()
                             BlockField(
@@ -492,10 +495,13 @@ private val FIELD_PADDING_H = 14.dp
 /**
  * 私钥来源：手工粘贴，或者密钥库里的某一把。
  *
- * 密钥库里的钥匙**平铺成一排 chip**，不藏在下拉框里：藏起来的话，按钮上只写着「直接粘贴」，
+ * 密钥库里的钥匙**平铺成一排 chip**，不藏在下拉框里：藏起来的话，按钮上只写着「直接粘贴」,
  * 用户看不出这台设备上早就导过钥匙，只会又粘一遍。
  * 选了库里的钥匙，表单里就不再出现任何私钥输入框——一台主机只能有一个 PEM 的来源，
  * 同时摆两处会让人搞不清最终连的是哪一份。
+ *
+ * 标题行右侧常驻「管理密钥」入口：表单里挑不到想要的钥匙时跳去密钥管理导入，
+ * 回来后钥匙列表跟着 Flow 自动长出来（见 [HostEditViewModel.keys]），不用重建页面。
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -504,16 +510,30 @@ private fun KeySourcePicker(
     selectedId: String?,
     onSelect: (String) -> Unit,
     onUsePasted: () -> Unit,
+    onManage: () -> Unit,
 ) {
     Column(
         modifier = Modifier.padding(horizontal = FIELD_PADDING_H, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Text(
-            text = stringResource(R.string.field_key_source),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = stringResource(R.string.field_key_source),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            TextButton(
+                onClick = onManage,
+                // 默认内容边距左右各 24dp，「管理密钥」四个字能撑到小半行宽，压到跟标签行一个量级
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+            ) {
+                Text(stringResource(R.string.key_source_manage))
+            }
+        }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(
                 selected = selectedId == null,
