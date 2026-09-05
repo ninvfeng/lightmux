@@ -5,9 +5,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
@@ -495,7 +495,7 @@ private val FIELD_PADDING_H = 14.dp
 /**
  * 私钥来源：手工粘贴，或者密钥库里的某一把。
  *
- * 密钥库里的钥匙**平铺成一排 chip**，不藏在下拉框里：藏起来的话，按钮上只写着「直接粘贴」,
+ * 密钥库里的钥匙**平铺成一排 chip**，不藏在下拉框里：藏起来的话，按钮上只写着「直接粘贴」，
  * 用户看不出这台设备上早就导过钥匙，只会又粘一遍。
  * 选了库里的钥匙，表单里就不再出现任何私钥输入框——一台主机只能有一个 PEM 的来源，
  * 同时摆两处会让人搞不清最终连的是哪一份。
