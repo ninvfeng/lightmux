@@ -28,8 +28,8 @@ android {
         applicationId = "net.lighttools.lightmux"
         minSdk = 24
         targetSdk = 35
-        versionCode = 61
-        versionName = "0.1.60"
+        versionCode = 62
+        versionName = "0.1.61"
         vectorDrawables { useSupportLibrary = true }
         // 本 app 只有 values/ 和 values-zh/ 两套文案，但 androidx / material3 各自带了
         // 89 种语言的字符串，全塞进 resources.arsc（该文件按对齐要求是**不压缩存储**的，
