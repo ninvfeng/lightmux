@@ -160,6 +160,10 @@ class FilesViewModel(
 
     fun mkdir(name: String) = mutate { host -> repository.mkdir(host, SftpPath.join(state.path, name)) }
 
+    fun createFile(name: String) = mutate { host ->
+        repository.createFile(host, SftpPath.join(state.path, name))
+    }
+
     fun rename(entry: RemoteEntry, name: String) = mutate { host ->
         repository.rename(host, entry.path, SftpPath.join(SftpPath.parent(entry.path), name))
     }

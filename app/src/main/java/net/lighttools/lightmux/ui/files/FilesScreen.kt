@@ -21,6 +21,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
+import androidx.compose.material.icons.automirrored.filled.NoteAdd
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.CreateNewFolder
@@ -213,6 +215,7 @@ private fun FilesContent(
     var pendingRename by remember { mutableStateOf<RemoteEntry?>(null) }
     var pendingDelete by remember { mutableStateOf<RemoteEntry?>(null) }
     var creatingFolder by remember { mutableStateOf(false) }
+    var creatingFile by remember { mutableStateOf(false) }
 
     // 浏览通道的关闭时机由 LightmuxRoot 统一判（进编辑器再回来时不该断了重连），这里只管拉数据
     LaunchedEffect(vm) { vm.start() }
@@ -257,9 +260,11 @@ private fun FilesContent(
             IconButton(onClick = { uploadPicker.launch(arrayOf(UPLOAD_MIME)) }, enabled = host != null) {
                 Icon(Icons.Default.Upload, stringResource(R.string.files_upload))
             }
-            IconButton(onClick = { creatingFolder = true }, enabled = host != null) {
-                Icon(Icons.Default.CreateNewFolder, stringResource(R.string.files_new_folder))
-            }
+            CreateMenu(
+                enabled = host != null,
+                onNewFolder = { creatingFolder = true },
+                onNewFile = { creatingFile = true },
+            )
             IconButton(onClick = vm::refresh) {
                 Icon(Icons.Default.Refresh, stringResource(R.string.refresh))
             }
@@ -351,6 +356,18 @@ private fun FilesContent(
                 creatingFolder = false
             },
             onDismiss = { creatingFolder = false },
+        )
+    }
+
+    if (creatingFile) {
+        NameDialog(
+            title = stringResource(R.string.files_new_file_title),
+            initial = "",
+            onConfirm = {
+                vm.createFile(it)
+                creatingFile = false
+            },
+            onDismiss = { creatingFile = false },
         )
     }
 
@@ -579,6 +596,44 @@ private fun EntryRow(
                 onClick = {
                     menuOpen = false
                     onDelete()
+                },
+            )
+        }
+    }
+}
+
+/**
+ * 顶栏的「新建」：一个图标带出目录 / 文件两项。
+ *
+ * 不摆两个图标——顶栏已经有隐藏 / 上传 / 刷新三个，再加一个就把主机名挤没了，
+ * 半屏面板那个壳更窄。新建本来就是低频动作，多一次点击换回标题的可读性划算。
+ */
+@Composable
+private fun CreateMenu(
+    enabled: Boolean,
+    onNewFolder: () -> Unit,
+    onNewFile: () -> Unit,
+) {
+    var menuOpen by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { menuOpen = true }, enabled = enabled) {
+            Icon(Icons.Default.Add, stringResource(R.string.files_create))
+        }
+        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            DropdownMenuItem(
+                leadingIcon = { Icon(Icons.Default.CreateNewFolder, contentDescription = null) },
+                text = { Text(stringResource(R.string.files_new_folder)) },
+                onClick = {
+                    menuOpen = false
+                    onNewFolder()
+                },
+            )
+            DropdownMenuItem(
+                leadingIcon = { Icon(Icons.AutoMirrored.Filled.NoteAdd, contentDescription = null) },
+                text = { Text(stringResource(R.string.files_new_file)) },
+                onClick = {
+                    menuOpen = false
+                    onNewFile()
                 },
             )
         }

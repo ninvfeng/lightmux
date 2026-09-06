@@ -216,8 +216,11 @@
     <string name="files_copy_path">Copy path</string>
     <string name="files_path_copied">Path copied</string>
     <string name="files_send_to_terminal">Insert into terminal</string>
+    <string name="files_create">New</string>
     <string name="files_new_folder">New folder</string>
     <string name="files_new_folder_title">New folder</string>
+    <string name="files_new_file">New file</string>
+    <string name="files_new_file_title">New file</string>
     <string name="files_rename_title">Rename</string>
     <string name="files_show_hidden">Hidden files</string>
     <string name="files_delete_title">Delete?</string>

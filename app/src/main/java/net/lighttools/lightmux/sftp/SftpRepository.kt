@@ -107,6 +107,19 @@ class SftpRepository(private val sessions: SessionManager) {
         client.mkdir(path)
     }
 
+    /**
+     * 新建空文件。
+     *
+     * **必须带 `EXCL`**：不带的话同名文件会被 `CREAT` 悄悄打开——若再配上 `TRUNC` 就是直接清空，
+     * 用户以为自己新建了一个文件，实际上把原来那个几百行的配置删干净了。
+     * 有 `EXCL` 时服务端直接拒绝，失败总比静默毁数据强。
+     *
+     * 权限位不设：交给服务端的 umask 决定，和上传新文件的处理一致。
+     */
+    suspend fun createFile(host: Host, path: String) = onLane(host, Lane.BROWSE) { client ->
+        client.open(path, EnumSet.of(OpenMode.WRITE, OpenMode.CREAT, OpenMode.EXCL)).close()
+    }
+
     suspend fun rename(host: Host, from: String, to: String) = onLane(host, Lane.BROWSE) { client ->
         client.rename(from, to)
     }

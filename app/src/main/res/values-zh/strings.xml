@@ -208,8 +208,11 @@
     <string name="files_copy_path">复制路径</string>
     <string name="files_path_copied">路径已复制</string>
     <string name="files_send_to_terminal">输入到终端</string>
+    <string name="files_create">新建</string>
     <string name="files_new_folder">新建目录</string>
     <string name="files_new_folder_title">新建目录</string>
+    <string name="files_new_file">新建文件</string>
+    <string name="files_new_file_title">新建文件</string>
     <string name="files_rename_title">重命名</string>
     <string name="files_show_hidden">隐藏文件</string>
     <string name="files_delete_title">确认删除？</string>
