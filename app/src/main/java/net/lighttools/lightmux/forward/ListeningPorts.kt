@@ -39,8 +39,13 @@ object ListeningPorts {
      *
      * `-n` 不做端口名反查（省掉一次 `/etc/services` 查表，也避免把 `6379` 显示成 `redis`
      * 之后我们还要反解回数字）；`-p` 拿进程名，非 root 时它只会少给几行，不会报错。
+     *
+     * `PATH` 要补 `/usr/sbin`、`/sbin`：exec channel 是非交互 shell，不读 `.bashrc`，
+     * 而这两个网络工具正装在那儿——非 root 用户的默认 PATH 里往往没有它们，
+     * 结果不是报错而是「一个监听端口都没有」，比报错更难查。
      */
-    const val PROBE_COMMAND = "ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null"
+    const val PROBE_COMMAND =
+        "export PATH=\"\$PATH:/usr/sbin:/sbin\"; ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null"
 
     private val WHITESPACE = Regex("\\s+")
 

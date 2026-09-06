@@ -95,6 +95,17 @@ object Tmux {
         "#{window_active}:#{window_panes}:#{window_index}:#{window_id}:#{session_id}:#{window_name}"
 
     /**
+     * 侧通道命令统一的 `PATH` 补丁。**探测和动作必须共用同一份**。
+     *
+     * exec channel 起的是非交互 shell，不读 `.bashrc` / `.zshrc`，tmux 装在 `/usr/local/bin`
+     * （FreeBSD、源码编译）或 homebrew 前缀下时，这里根本看不见它。只补探测那半边的后果很隐蔽：
+     * 主页照常列出会话和窗口（探测成功），点下去却每次都 `tmux: not found` ——
+     * 动作命令头一句 server pid 断言就不成立，一律以 [ActionResult.STALE] 退出，
+     * 表现是「这台服务器上窗口切不动，只反复提示列表已过期」。
+     */
+    const val PATH_FIX = "export PATH=\"\$PATH:/usr/local/bin:/opt/homebrew/bin\""
+
+    /**
      * 探测命令：一条 exec 拿到「有没有 tmux + 有哪些会话 + 有哪些窗口」。
      *
      * 拆成三条命令发就是三次 channel 往返，手机网络下串起来的延迟很难看。
@@ -110,7 +121,7 @@ object Tmux {
      * 那属于正常情况（等价于「没有会话」），不是错误。
      */
     val PROBE_COMMAND: String = listOf(
-        "export PATH=\"\$PATH:/usr/local/bin:/opt/homebrew/bin\"",
+        PATH_FIX,
         "if command -v tmux >/dev/null 2>&1; then echo ${MARKER_TMUX}1; else echo ${MARKER_TMUX}0; " +
             "pm=''; for p in ${PACKAGE_MANAGERS.joinToString(" ")}; do " +
             "if command -v \$p >/dev/null 2>&1; then pm=\$p; break; fi; done; " +
@@ -371,9 +382,11 @@ object Tmux {
      *
      * 不能指望 `ExecResult.exitCode`：我们发的常是 `;` 拼起来的复合命令，channel 拿到的
      * 是最后一条的退出码。stderr 合进 stdout，失败原因（`can't find session` 之类）才能带回 UI。
+     *
+     * 前面那段 [PATH_FIX] 不能省：探测补了 PATH 而动作没补时，两边对「有没有 tmux」的判断会分叉。
      */
     fun action(command: String): String =
-        "out=\$($command 2>&1); rc=\$?; echo \"$MARKER_RC\$rc\"; printf '%s\\n' \"\$out\""
+        "$PATH_FIX; out=\$($command 2>&1); rc=\$?; echo \"$MARKER_RC\$rc\"; printf '%s\\n' \"\$out\""
 
     // ---- 输出解析 ------------------------------------------------------------
 

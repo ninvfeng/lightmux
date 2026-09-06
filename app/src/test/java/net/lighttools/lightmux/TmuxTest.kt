@@ -181,6 +181,13 @@ class TmuxTest {
         assertTrue(wrapped.contains("tmux kill-session -t '=x'"))
     }
 
+    @Test
+    fun `动作命令和探测命令补同一份 PATH`() {
+        // 只补探测那半边时，tmux 装在 /usr/local/bin 的机器上列表照常显示、窗口却切不动
+        assertTrue(Tmux.action("tmux select-window -t '@7'").startsWith("${Tmux.PATH_FIX};"))
+        assertTrue(Tmux.PROBE_COMMAND.startsWith("${Tmux.PATH_FIX};"))
+    }
+
     // ---- 正常解析 ------------------------------------------------------------
 
     @Test
