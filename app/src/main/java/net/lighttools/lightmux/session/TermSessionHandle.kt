@@ -97,7 +97,7 @@ class TermSessionHandle internal constructor(
 
     val session: TerminalSession = TerminalSession(transport, transcriptRows, Delegate())
 
-    /** 显示名。默认主机名，之后由终端标题或 tmux 会话名覆盖。 */
+    /** 显示名。tmux 会话恒为 `主机: 会话名`；裸会话默认主机名，之后跟着终端标题走。 */
     @Volatile
     var title: String = tmuxSession?.let { "${host.name}: $it" } ?: host.name
 
@@ -227,7 +227,13 @@ class TermSessionHandle internal constructor(
         }
 
         override fun onTitleChanged(changedSession: TerminalSession) {
-            changedSession.title?.takeIf { it.isNotBlank() }?.let { title = it }
+            // **tmux 会话不认远端标题**：会话名才是它的身份（见 CLAUDE.md 侧通道纪律 ③），
+            // 而 OSC 标题是远端 shell 的 PS1 想写什么就写什么——实测有只写出一个 `[` 的
+            // （标题序列被 tmux 分片，OSC 收集提前终止），覆盖过去这一行就再也认不出是谁。
+            // 裸会话没有别的名字可用，仍然跟着标题走。
+            if (tmuxSession == null) {
+                changedSession.title?.takeIf { it.isNotBlank() }?.let { title = it }
+            }
             client?.onTitleChanged(changedSession)
         }
 
