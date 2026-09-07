@@ -30,6 +30,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
@@ -164,6 +165,24 @@ fun HomeScreen(
                 onRefresh = vm::refreshExpanded,
             ) {
                 LazyColumn(state = vm.listState, modifier = Modifier.fillMaxSize()) {
+                    /*
+                     * 「我现在连着什么」和「这台机器上有什么」是两个问题，树只回答得了后一个：
+                     * 会话散在各主机节点下，要先展开对应主机才看得见，而想放掉一条连接的用户
+                     * 心里没有主机这一层——他要的就是一张「还连着的」清单。放在树上方、跟着列表滚，
+                     * 没有会话时整段不出现，不给常态多占一行。
+                     */
+                    if (sessions.isNotEmpty()) {
+                        item(key = KEY_CONNECTED_HEADER) { ConnectedHeader() }
+                        items(sessions, key = { "$KEY_CONNECTED_PREFIX${it.id}" }) { handle ->
+                            ConnectedSessionRow(
+                                handle = handle,
+                                onClick = { onOpenTerminal(handle.id) },
+                                onDisconnect = { vm.closeSession(handle.id) },
+                            )
+                        }
+                        item(key = KEY_CONNECTED_DIVIDER) { HorizontalDivider() }
+                    }
+
                     items(hosts, key = { it.id }) { host ->
                         HostNode(
                             host = host,
@@ -634,6 +653,67 @@ private fun HostRow(
     }
 }
 
+/** 已连接区的段头。右边那句话是这一段的重点，见 [ConnectedSessionRow]。 */
+@Composable
+private fun ConnectedHeader() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.connected_header),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = stringResource(R.string.connected_hint),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/**
+ * 已连接区的一行：点行体回到那个终端，点行尾断开这条连接。
+ *
+ * 断的只是本地这条 SSH——远端 tmux 会话照跑，回头点会话行就 attach 回去了。这件事必须
+ * 让用户信得过，所以段头挂着「断开不影响远端 tmux」，图标也用断链而不是叉：
+ * 叉在这棵树里的三处含义都是「杀掉」（kill-session / kill-window / 关掉裸会话），
+ * 而这里恰恰不是。也因此不设二次确认——断错了点回去就是。
+ */
+@Composable
+private fun ConnectedSessionRow(
+    handle: TermSessionHandle,
+    onClick: () -> Unit,
+    onDisconnect: () -> Unit,
+) {
+    val state by handle.state.collectAsState()
+    // 主机名一律写在副标题里：title 会被终端标题覆盖成 `user@host:~` 之类，靠它认不出是哪台机器；
+    // 而两台机器上各有一个叫 main 的会话是常态。
+    val status = when (val current = state) {
+        SessionState.Connecting -> stringResource(R.string.connecting)
+        SessionState.Connected -> null
+        // 同 [BareSessionRow]：不显示倒计时秒数，那会让这一行每秒把整张列表带着重组一次
+        is SessionState.Reconnecting -> stringResource(R.string.session_reconnecting, current.attempt)
+        SessionState.Disconnected -> stringResource(R.string.session_disconnected)
+    }
+    TreeRow(
+        level = 0,
+        leading = if (handle.tmuxSession != null) Icons.Default.Dashboard else Icons.Default.Terminal,
+        title = handle.title,
+        subtitle = if (status == null) handle.host.name else "${handle.host.name} · $status",
+        onClick = onClick,
+    ) {
+        IconButton(onClick = onDisconnect) {
+            Icon(Icons.Default.LinkOff, stringResource(R.string.disconnect_session))
+        }
+    }
+}
+
 @Composable
 private fun BareSessionRow(
     handle: TermSessionHandle,
@@ -738,3 +818,11 @@ fun TreeRow(
         trailing?.invoke()
     }
 }
+
+/*
+ * 已连接区那几个 item 的 key。主机 id 是 UUID，前缀过的串不可能和它撞上——撞了的后果是
+ * LazyColumn 抛 IllegalArgumentException，整页白屏。
+ */
+private const val KEY_CONNECTED_HEADER = "connected-header"
+private const val KEY_CONNECTED_DIVIDER = "connected-divider"
+private const val KEY_CONNECTED_PREFIX = "connected-"

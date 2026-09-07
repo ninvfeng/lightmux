@@ -35,6 +35,9 @@
     <string name="delete_host_message">%1$s and its saved credentials will be removed.</string>
 
     <!-- 会话 -->
+    <string name="connected_header">Connected</string>
+    <string name="connected_hint">tmux keeps running</string>
+    <string name="disconnect_session">Disconnect</string>
     <string name="session_disconnected">Disconnected</string>
     <string name="connecting">Connecting…</string>
     <string name="session_reconnecting">Reconnecting · attempt %1$d</string>
