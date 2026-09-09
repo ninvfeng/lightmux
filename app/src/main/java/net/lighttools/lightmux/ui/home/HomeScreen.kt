@@ -198,7 +198,10 @@ fun HomeScreen(
 
                     // 不设 key：拖动中列表一直在重排，按 key 复用会把正在收手势的节点搬走（同 QuickKeysSheet）
                     itemsIndexed(hostOrder) { index, host ->
-                        Row(modifier = Modifier.fillMaxWidth().reorderableRow(hostReorder, index)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().reorderableRow(hostReorder, index),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
                             DragHandle(
                                 state = hostReorder,
                                 index = index,
@@ -658,6 +661,7 @@ private fun HostRow(
         title = host.name,
         subtitle = if (snapshot != null) "${host.endpoint} · $snapshot" else host.endpoint,
         badge = if (activeSessions > 0) "●$activeSessions" else null,
+        startInset = 0.dp,
         onClick = onToggle,
         onLongClick = { menuOpen = true },
     ) {
@@ -825,6 +829,8 @@ fun TreeRow(
     modifier: Modifier = Modifier,
     subtitle: String? = null,
     badge: String? = null,
+    // 主机行前面已经有拖动手柄自带的留白，不需要这层再起一份缩进，见 HostRow 调用处。
+    startInset: Dp = 12.dp,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
@@ -833,9 +839,9 @@ fun TreeRow(
         modifier = modifier
             .fillMaxWidth()
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(start = (12 + level * 20).dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+            .padding(start = startInset + (level * 20).dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Icon(
             imageVector = leading,
