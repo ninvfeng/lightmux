@@ -35,6 +35,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -51,6 +52,7 @@ import net.lighttools.lightmux.ui.common.BackButton
 import net.lighttools.lightmux.ui.common.ErrorBanner
 import net.lighttools.lightmux.ui.keys.PickKeyFileButton
 import net.lighttools.lightmux.ui.terminal.connectionFailureText
+import net.lighttools.lightmux.ui.theme.Success
 
 /**
  * 主机增删改表单。按「基本 / 认证方式 / 高级」分三张卡片，卡片内一行一项、行间细分隔线。
@@ -259,8 +261,9 @@ private fun TestResultBanner(test: HostTest) = when (test) {
 
     is HostTest.Ok -> Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.tertiaryContainer,
-        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+        // 成功必须是绿的，见 [Success]
+        color = Success,
+        contentColor = Color.White,
     ) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
             Text(stringResource(R.string.host_test_ok), style = MaterialTheme.typography.bodyMedium)
