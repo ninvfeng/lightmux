@@ -64,6 +64,11 @@ object HostFacts {
     val PROBE_COMMAND: String = listOf(
         // exec channel 是非交互 shell，不读 rc 文件，PATH 里可能没有 sbin
         "export PATH=\"\$PATH:/usr/sbin:/sbin:/usr/local/bin\"",
+        // zsh 默认开 NOMATCH：通配符匹配不到时**报错并中止整条命令**，而不是像 sh / bash
+        // 那样保留字面量。GPU 段那两个 card 通配符在没有独显的机器上必然落空，
+        // 于是远端登录 shell 是 zsh 的主机连 __LM_END__ 都吐不出来，整页监控报「采集失败」。
+        // sh / bash 没有 setopt 这个内建，command not found 被 `|| true` 吞掉。
+        "setopt no_nomatch 2>/dev/null || true",
         "if [ -r /proc/stat ]; then echo ${MARKER_PROCFS}1; else echo ${MARKER_PROCFS}0; fi",
         "echo $MARKER_UPTIME1", "cat /proc/uptime 2>/dev/null",
         "echo $MARKER_CPU1", "cat /proc/stat 2>/dev/null",

@@ -609,6 +609,18 @@ class HostFactsTest {
         assertTrue(cmd.indexOf(HostFacts.MARKER_CPU2) < cmd.indexOf(HostFacts.MARKER_GPU))
     }
 
+    @Test
+    fun `通配符前先关掉 zsh 的 NOMATCH，否则没有独显的机器整页采集都会断`() {
+        val cmd = HostFacts.PROBE_COMMAND
+        // zsh 匹配不到通配符时报错并中止整条命令，__LM_END__ 吐不出来，用户看到的是「采集失败」
+        assertTrue(cmd.contains("setopt no_nomatch"))
+        // sh / bash 没有 setopt 这个内建，必须兜住 command not found
+        assertTrue(cmd.contains("setopt no_nomatch 2>/dev/null || true"))
+        // 关闭动作必须排在所有通配符之前才有意义
+        assertTrue(cmd.indexOf("setopt no_nomatch") < cmd.indexOf("/sys/class/drm/card[0-9]"))
+        assertTrue(cmd.indexOf("setopt no_nomatch") < cmd.indexOf("hwmon*"))
+    }
+
     // ---- 容器 ----------------------------------------------------------------
 
     @Test
