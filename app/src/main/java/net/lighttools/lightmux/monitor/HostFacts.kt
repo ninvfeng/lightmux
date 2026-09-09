@@ -30,6 +30,7 @@ object HostFacts {
     const val MARKER_ADDR = "__LM_ADDR__"
     const val MARKER_SYSTEM = "__LM_SYS__"
     const val MARKER_PS = "__LM_PS__"
+    const val MARKER_GPU = "__LM_GPU__"
     const val MARKER_DOCKER = "__LM_DOCKER__"
 
     /** 容器段内部的二级哨兵：前半是 `ps -a`，后半是 `stats`。docker 不存在时这行压根不出现 */
@@ -45,7 +46,7 @@ object HostFacts {
         MARKER_UPTIME1, MARKER_CPU1, MARKER_NET1,
         MARKER_UPTIME2, MARKER_CPU2, MARKER_NET2,
         MARKER_LOAD, MARKER_MEM, MARKER_DISK, MARKER_ADDR, MARKER_SYSTEM,
-        MARKER_PS, MARKER_DOCKER, MARKER_CSTATS, MARKER_END,
+        MARKER_PS, MARKER_GPU, MARKER_DOCKER, MARKER_CSTATS, MARKER_END,
     )
 
     /**
@@ -81,6 +82,7 @@ object HostFacts {
         "echo \"$PREFIX_HOSTNAME\$(hostname 2>/dev/null || cat /proc/sys/kernel/hostname 2>/dev/null)\"",
         "grep -m1 '^PRETTY_NAME=' /etc/os-release 2>/dev/null || head -n 1 /etc/issue 2>/dev/null",
         "echo $MARKER_PS", PROCESS_COMMAND,
+        "echo $MARKER_GPU", GPU_COMMAND,
         "echo $MARKER_DOCKER", CONTAINER_COMMAND,
         "echo $MARKER_END",
     ).joinToString("; ")
@@ -110,6 +112,43 @@ object HostFacts {
      */
     private const val ADDRESS_COMMAND =
         "ip -o -4 addr show scope global 2>/dev/null || hostname -I 2>/dev/null"
+
+    /**
+     * GPU 占用。**nvidia-smi 优先，没有再退到 AMD 的 sysfs**。
+     *
+     * 没有第三条路：Intel 核显要 `intel_gpu_top` 且得有 root，装了的机器万里挑一；
+     * 而 sysfs 这条路本身就是照着「直读 /proc」的原则来的——`rocm-smi` 的输出格式
+     * 每个版本都在变，解析它等于给自己埋 bug。
+     *
+     * 输出统一成 `使用率, 已用MiB, 总量MiB, 温度, 名字`，**名字一律放行尾**：
+     * 显卡型号里带空格和括号，放中间会把后面的字段冲乱（同 tmux 侧通道那条纪律）。
+     *
+     * `timeout` 是必须的：驱动挂了的时候 `nvidia-smi` 会吊在 ioctl 上好几十秒，
+     * 而它和 CPU、内存共用同一条 exec。
+     *
+     * sysfs 那路的 glob 写成 `card[0-9]` 而不是 `card*`：后者会扫到 `card0-DP-1` 这类
+     * **连接器**目录，它们的 `device` 是指回同一张卡的软链，同一块 GPU 会被列好几遍。
+     * 显存单位在 shell 里就除成 MiB，温度从毫摄氏度除成摄氏度，好让两条路输出同一种行；
+     * 读不到的那一项**留空字段**而不是补 0——一条 0 的显存条会被当成「显存没被占用」。
+     */
+    private const val GPU_COMMAND =
+        "if command -v nvidia-smi >/dev/null 2>&1; then " +
+            "timeout 4 nvidia-smi " +
+            "--query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu,name " +
+            "--format=csv,noheader,nounits 2>/dev/null | head -n 8; " +
+            "else for __lm_gc in /sys/class/drm/card[0-9] /sys/class/drm/card[0-9][0-9]; do " +
+            "__lm_gd=\$__lm_gc/device; " +
+            "[ -r \"\$__lm_gd/gpu_busy_percent\" ] || continue; " +
+            "__lm_gu=\$(cat \"\$__lm_gd/gpu_busy_percent\" 2>/dev/null); " +
+            "__lm_gm=\$(cat \"\$__lm_gd/mem_info_vram_used\" 2>/dev/null); " +
+            "[ -n \"\$__lm_gm\" ] && __lm_gm=\$((__lm_gm / 1048576)); " +
+            "__lm_gx=\$(cat \"\$__lm_gd/mem_info_vram_total\" 2>/dev/null); " +
+            "[ -n \"\$__lm_gx\" ] && __lm_gx=\$((__lm_gx / 1048576)); " +
+            "__lm_gt=\$(cat \"\$__lm_gd\"/hwmon/hwmon*/temp1_input 2>/dev/null | head -n 1); " +
+            "[ -n \"\$__lm_gt\" ] && __lm_gt=\$((__lm_gt / 1000)); " +
+            "echo \"\$__lm_gu, \$__lm_gm, \$__lm_gx, \$__lm_gt, " +
+            "\${__lm_gc##*/} \$(sed -n 's/^DRIVER=//p' \$__lm_gd/uevent 2>/dev/null)\"; " +
+            "done; fi"
 
     /**
      * 容器列表 + 资源占用。docker 优先，没有再试 podman（RHEL 系默认只装 podman）。
@@ -214,6 +253,7 @@ object HostFacts {
                 interfaces = interfaces,
                 addresses = addresses.local,
                 processes = parseProcesses(sections[MARKER_PS]),
+                gpus = parseGpus(sections[MARKER_GPU]),
                 containers = parseContainers(sections[MARKER_DOCKER], sections[MARKER_CSTATS]),
             )
         )
@@ -513,6 +553,30 @@ object HostFacts {
         return byPid.values.toList()
     }
 
+    // ---- GPU -----------------------------------------------------------------
+
+    /**
+     * `使用率, 已用MiB, 总量MiB, 温度, 名字`（见 [GPU_COMMAND]）。
+     *
+     * 名字在行尾，所以 `limit = 5` 之后剩下的整段都是它——型号名里的逗号
+     * （`NVIDIA RTX A4000, Ada` 这类 OEM 命名）不会把行切散。
+     *
+     * nvidia-smi 对读不出来的字段输出 `[N/A]`（直通给虚拟机的卡、老驱动上的温度），
+     * 转不成数字自然落成 null——**这里绝不能补 0**，0% 会被当成「这张卡闲着」。
+     */
+    private fun parseGpus(lines: List<String>?): List<GpuInfo> = lines.orEmpty().mapNotNull { line ->
+        val parts = line.split(',', limit = 5)
+        if (parts.size < 5) return@mapNotNull null
+        val name = parts[4].trim().ifBlank { null } ?: return@mapNotNull null
+        GpuInfo(
+            name = name,
+            utilization = parts[0].trim().toDoubleOrNull()?.let { (it / 100.0).coerceIn(0.0, 1.0) },
+            memoryUsedBytes = parts[1].trim().toLongOrNull()?.times(BYTES_PER_MIB),
+            memoryTotalBytes = parts[2].trim().toLongOrNull()?.times(BYTES_PER_MIB),
+            temperatureCelsius = parts[3].trim().toIntOrNull(),
+        )
+    }
+
     // ---- 容器 ----------------------------------------------------------------
 
     /**
@@ -623,6 +687,9 @@ object HostFacts {
     private val WHITESPACE = Regex("\\s+")
 
     private const val PRETTY_NAME_PREFIX = "PRETTY_NAME="
+
+    /** nvidia-smi 的显存单位是 MiB，模型里统一存 byte。 */
+    private const val BYTES_PER_MIB = 1024L * 1024L
 
     /** 命令里写死的 `sleep 1`；两次 uptime 读不出来时拿它当分母。 */
     private const val NOMINAL_INTERVAL_SECONDS = 1.0

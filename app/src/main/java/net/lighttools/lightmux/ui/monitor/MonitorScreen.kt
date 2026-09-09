@@ -47,6 +47,7 @@ import net.lighttools.lightmux.R
 import net.lighttools.lightmux.monitor.ContainerInfo
 import net.lighttools.lightmux.monitor.CpuUsage
 import net.lighttools.lightmux.monitor.DiskUsage
+import net.lighttools.lightmux.monitor.GpuInfo
 import net.lighttools.lightmux.monitor.HostSnapshot
 import net.lighttools.lightmux.monitor.LoadAverage
 import net.lighttools.lightmux.monitor.MemoryUsage
@@ -215,6 +216,15 @@ private fun Metrics(
         Section(stringResource(R.string.monitor_cpu)) {
             CpuRows(snapshot.cpu, snapshot.load.formatted(), coresExpanded, onToggleCores)
         }
+        // 没有独立显卡、或驱动工具不在 PATH 里，整段不显示——同容器、进程
+        if (snapshot.gpus.isNotEmpty()) {
+            Section(stringResource(R.string.monitor_gpu)) {
+                snapshot.gpus.forEachIndexed { index, gpu ->
+                    // 单卡机器上标个 #0 只是噪音，多卡时不标又分不出哪条是哪张
+                    GpuRows(gpu = gpu, index = index, numbered = snapshot.gpus.size > 1)
+                }
+            }
+        }
         Section(stringResource(R.string.monitor_memory)) { MemoryRow(snapshot.memory) }
         snapshot.swap?.let { swap ->
             Section(stringResource(R.string.monitor_swap)) { MemoryRow(swap) }
@@ -308,6 +318,45 @@ private fun CpuRows(cpu: CpuUsage, load: String, coresExpanded: Boolean, onToggl
         style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+}
+
+/**
+ * 一张卡两条进度条：算力占用在上、显存在下，温度跟在后面一行小字（同 CPU 段的负载行）。
+ *
+ * **采不到的那条整条不画**：直通给虚拟机的卡报不出 utilization，画一条 0% 的进度条
+ * 会被当成「这张卡闲着」，而它可能正被另一台虚拟机跑满（PRD §4.4）。
+ */
+@Composable
+private fun GpuRows(gpu: GpuInfo, index: Int, numbered: Boolean) {
+    val label = if (numbered) "#$index ${gpu.name}" else gpu.name
+    val utilization = gpu.utilization
+    if (utilization != null) {
+        Meter(
+            label = label,
+            value = stringResource(R.string.monitor_percent, formatPercent(utilization)),
+            ratio = utilization.toFloat(),
+        )
+    } else {
+        // 名字这一行不能跟着消失：整张卡不见了，用户会以为机器上没这块卡
+        InfoRow(label, stringResource(R.string.monitor_unavailable))
+    }
+    val used = gpu.memoryUsedBytes
+    val total = gpu.memoryTotalBytes
+    val ratio = gpu.memoryRatio
+    if (used != null && total != null && ratio != null) {
+        Meter(
+            label = stringResource(R.string.monitor_gpu_vram, formatBytes(used), formatBytes(total)),
+            value = stringResource(R.string.monitor_percent, formatPercent(ratio.toDouble())),
+            ratio = ratio,
+        )
+    }
+    gpu.temperatureCelsius?.let {
+        Text(
+            text = stringResource(R.string.monitor_gpu_temp, it),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
 }
 
 @Composable

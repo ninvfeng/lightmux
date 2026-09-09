@@ -177,6 +177,9 @@
     </plurals>
     <string name="monitor_core">核 %1$d</string>
     <string name="monitor_load">负载 %1$s · %2$s · %3$s</string>
+    <string name="monitor_gpu">GPU</string>
+    <string name="monitor_gpu_vram">显存 %1$s / %2$s</string>
+    <string name="monitor_gpu_temp">温度 %1$d °C</string>
     <string name="monitor_memory">内存</string>
     <string name="monitor_swap">交换分区</string>
     <string name="monitor_disk">磁盘</string>

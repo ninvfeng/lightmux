@@ -184,6 +184,9 @@
     </plurals>
     <string name="monitor_core">Core %1$d</string>
     <string name="monitor_load">Load %1$s · %2$s · %3$s</string>
+    <string name="monitor_gpu">GPU</string>
+    <string name="monitor_gpu_vram">VRAM %1$s / %2$s</string>
+    <string name="monitor_gpu_temp">Temperature %1$d °C</string>
     <string name="monitor_memory">Memory</string>
     <string name="monitor_swap">Swap</string>
     <string name="monitor_disk">Disks</string>

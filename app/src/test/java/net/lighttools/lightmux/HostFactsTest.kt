@@ -90,6 +90,7 @@ class HostFactsTest {
         addr: String? = null,
         system: String? = this.system,
         ps: String? = null,
+        gpu: String? = null,
         docker: String? = null,
         stats: String? = null,
         end: Boolean = true,
@@ -109,6 +110,7 @@ class HostFactsTest {
         section(HostFacts.MARKER_ADDR, addr)
         section(HostFacts.MARKER_SYSTEM, system)
         section(HostFacts.MARKER_PS, ps)
+        section(HostFacts.MARKER_GPU, gpu)
         section(HostFacts.MARKER_DOCKER, docker)
         // docker 不存在时这个二级哨兵压根不出现，所以它跟着 stats 走而不是跟着 docker 走
         section(HostFacts.MARKER_CSTATS, stats)
@@ -514,6 +516,97 @@ class HostFactsTest {
         // 少了内存那一路，UI 上「按内存排序」就只能在 CPU 前几名里排，排出来是错的
         assertTrue(HostFacts.PROBE_COMMAND.contains("--sort=-pcpu"))
         assertTrue(HostFacts.PROBE_COMMAND.contains("--sort=-pmem"))
+    }
+
+    // ---- GPU -----------------------------------------------------------------
+
+    @Test
+    fun `nvidia-smi 的一行拆成占用、显存与温度`() {
+        val gpu = "37, 2048, 24564, 61, NVIDIA GeForce RTX 4090"
+        val card = snapshotOf(output(gpu = gpu)).gpus.single()
+        assertEquals("NVIDIA GeForce RTX 4090", card.name)
+        assertEquals(0.37, card.utilization!!, 1e-9)
+        // 命令给的是 MiB，模型里统一存 byte
+        assertEquals(2048L * 1024 * 1024, card.memoryUsedBytes)
+        assertEquals(24564L * 1024 * 1024, card.memoryTotalBytes)
+        assertEquals(61, card.temperatureCelsius)
+        assertEquals(2048.0 / 24564, card.memoryRatio!!.toDouble(), 1e-6)
+    }
+
+    @Test
+    fun `显卡型号里的逗号不会把行切散`() {
+        // 名字放行尾就是为了这个：OEM 命名里带逗号的卡不少
+        val card = snapshotOf(output(gpu = "0, 1, 2, 3, NVIDIA RTX A4000, Ada Generation")).gpus.single()
+        assertEquals("NVIDIA RTX A4000, Ada Generation", card.name)
+    }
+
+    @Test
+    fun `多卡按 nvidia-smi 的顺序列出，顺序就是卡的编号`() {
+        val gpu = """
+            10, 100, 8192, 40, Tesla T4
+            90, 7000, 8192, 78, Tesla T4
+        """.trimIndent()
+        val gpus = snapshotOf(output(gpu = gpu)).gpus
+        assertEquals(2, gpus.size)
+        assertEquals(0.1, gpus[0].utilization!!, 1e-9)
+        assertEquals(0.9, gpus[1].utilization!!, 1e-9)
+    }
+
+    @Test
+    fun `读不出来的字段是 null 而不是 0`() {
+        // 直通给虚拟机的卡报不出 utilization，老驱动报不出温度——0% 会被当成「这张卡闲着」
+        val card = snapshotOf(output(gpu = "[N/A], 512, 16384, [N/A], NVIDIA A100-SXM4")).gpus.single()
+        assertNull(card.utilization)
+        assertNull(card.temperatureCelsius)
+        assertEquals(512L * 1024 * 1024, card.memoryUsedBytes)
+    }
+
+    @Test
+    fun `AMD 的 sysfs 那路输出同一种行`() {
+        // 换算在 shell 里就做掉了，解析这边两条路没有分支
+        val card = snapshotOf(output(gpu = "45, 512, 8176, 47, card0 amdgpu")).gpus.single()
+        assertEquals("card0 amdgpu", card.name)
+        assertEquals(0.45, card.utilization!!, 1e-9)
+        assertEquals(47, card.temperatureCelsius)
+    }
+
+    @Test
+    fun `sysfs 那路读不到显存时是 null，不是 0 字节`() {
+        // shell 里留的是空字段。补 0 会画出一条「显存没被占用」的空条
+        val card = snapshotOf(output(gpu = "45, , , 47, card0 amdgpu")).gpus.single()
+        assertNull(card.memoryUsedBytes)
+        assertNull(card.memoryRatio)
+        assertEquals(0.45, card.utilization!!, 1e-9)
+    }
+
+    @Test
+    fun `字段不够或名字为空的行整行丢掉`() {
+        val gpu = """
+            45, 512, 8176, 47
+            45, 512, 8176, 47,
+            NVIDIA-SMI has failed because it couldn't communicate with the driver
+        """.trimIndent()
+        assertTrue(snapshotOf(output(gpu = gpu)).gpus.isEmpty())
+    }
+
+    @Test
+    fun `没有 GPU 的机器整次采集仍然成功`() {
+        val snapshot = snapshotOf(output(gpu = ""))
+        assertTrue(snapshot.gpus.isEmpty())
+        assertEquals(0.2, snapshot.cpu.total, 1e-9)
+    }
+
+    @Test
+    fun `GPU 命令套了 timeout，名字放在查询串行尾`() {
+        val cmd = HostFacts.PROBE_COMMAND
+        assertTrue(cmd.contains("--query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu,name"))
+        // 驱动挂掉时 nvidia-smi 能吊在 ioctl 上几十秒，它和 CPU、内存共用同一条 exec
+        assertTrue(cmd.contains("timeout 4 nvidia-smi"))
+        // card* 会扫到 card0-DP-1 这类连接器目录，同一块卡列好几遍
+        assertTrue(!cmd.contains("/sys/class/drm/card*"))
+        assertTrue(cmd.contains("/sys/class/drm/card[0-9]"))
+        // 和其余静态指标一样排在第二次采样之后，不能拉长采样间隔
+        assertTrue(cmd.indexOf(HostFacts.MARKER_CPU2) < cmd.indexOf(HostFacts.MARKER_GPU))
     }
 
     // ---- 容器 ----------------------------------------------------------------

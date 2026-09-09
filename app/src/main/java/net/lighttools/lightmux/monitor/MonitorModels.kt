@@ -16,6 +16,8 @@ data class HostSnapshot(
     val memory: MemoryUsage,
     /** 没配 swap 的机器为 null。显示一条 0/0 的条只会让人以为读错了 */
     val swap: MemoryUsage? = null,
+    /** 没有独立显卡、或驱动工具不在 PATH 里，都是空——同样不影响整次采集成立 */
+    val gpus: List<GpuInfo> = emptyList(),
     val disks: List<DiskUsage> = emptyList(),
     val interfaces: List<NetInterface> = emptyList(),
     /** 本机 IPv4，已剔除回环与虚拟网卡上的地址。没有 `ip` 也没有 `hostname -I` 时为空 */
@@ -53,6 +55,34 @@ data class MemoryUsage(val totalBytes: Long, val usedBytes: Long) {
     val ratio: Float
         get() = if (totalBytes <= 0L) 0f
         else (usedBytes.toDouble() / totalBytes).toFloat().coerceIn(0f, 1f)
+}
+
+/**
+ * 一块 GPU。
+ *
+ * 除名字外每一项都可能为 null：直通给虚拟机的卡报不出 `utilization.gpu`，
+ * AMD 的 sysfs 也不一定挂得出温度。采不到就是 null，不拿 0 充数，理由同 [HostSnapshot]。
+ *
+ * 显存统一存 byte——nvidia-smi 给的是 MiB，sysfs 给的是 byte，换算在解析时就做掉，
+ * 免得显示层还要记得这块数据是哪条命令采来的。
+ */
+data class GpuInfo(
+    val name: String,
+    /** 算力占用，取值 0..1。这是驱动直接给的瞬时值，不像 CPU 那样要自己算差值 */
+    val utilization: Double? = null,
+    val memoryUsedBytes: Long? = null,
+    val memoryTotalBytes: Long? = null,
+    val temperatureCelsius: Int? = null,
+) {
+
+    /** null = 显存读不到。别退化成 0f：一条空的进度条会被当成「显存没被占用」 */
+    val memoryRatio: Float?
+        get() {
+            val used = memoryUsedBytes ?: return null
+            val total = memoryTotalBytes ?: return null
+            if (total <= 0L) return null
+            return (used.toDouble() / total).toFloat().coerceIn(0f, 1f)
+        }
 }
 
 data class DiskUsage(
