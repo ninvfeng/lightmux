@@ -80,6 +80,45 @@ class HostFormTest {
     }
 
     @Test
+    fun `复制出来的是新主机，凭据照搬但绝不覆盖源主机`() {
+        val source = Host(
+            id = "h1",
+            name = "gz3",
+            hostname = "8.138.125.201",
+            port = 2222,
+            username = "root",
+            auth = AuthMethod.Password("old"),
+            loginCommand = "tmux ls",
+            proxyJumpId = "h9",
+        )
+        // 直接保存（用户什么都没改）就是这个复制功能最常见的用法
+        val saved = HostForm.copyOf(source, listOf("gz3", "gz3 2")).toHost(source)
+
+        // 这一条是整件事的要害：拿到源主机的 id 就等于把源主机改没了
+        assertTrue(saved.id != "h1")
+        assertEquals("gz3 3", saved.name)
+        assertEquals("8.138.125.201", saved.hostname)
+        assertEquals(2222, saved.port)
+        assertEquals("root", saved.username)
+        assertEquals(AuthMethod.Password("old"), saved.auth)
+        assertEquals("tmux ls", saved.loginCommand)
+        assertEquals("h9", saved.proxyJumpId)
+    }
+
+    @Test
+    fun `凭据解不开的主机复制过去也不算已保存`() {
+        val source = Host(
+            id = "h1",
+            name = "gz3",
+            hostname = "8.138.125.201",
+            username = "root",
+            auth = AuthMethod.Password("", credentialLost = true, cipher = "ZZZ"),
+        )
+        // 沿用一份解不开的密文只会让复制出来的主机拿空密码去撞服务端，必须逼用户重填
+        assertTrue(!HostForm.copyOf(source, listOf("gz3")).keepSecret)
+    }
+
+    @Test
     fun `编辑表单不回显明文密码`() {
         val existing = Host(
             name = "gz3",

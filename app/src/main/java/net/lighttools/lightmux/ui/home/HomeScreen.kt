@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -89,6 +90,7 @@ fun HomeScreen(
     onOpenTerminal: (sessionId: String) -> Unit,
     onAddHost: () -> Unit,
     onEditHost: (hostId: String) -> Unit,
+    onDuplicateHost: (hostId: String) -> Unit,
     onOpenMonitor: (hostId: String) -> Unit,
     onOpenFiles: (hostId: String) -> Unit,
     onOpenForward: (hostId: String) -> Unit,
@@ -197,6 +199,7 @@ fun HomeScreen(
                             onOpenFiles = { onOpenFiles(host.id) },
                             onOpenForward = { onOpenForward(host.id) },
                             onEditHost = { onEditHost(host.id) },
+                            onDuplicateHost = { onDuplicateHost(host.id) },
                             onDeleteHost = { pendingDelete = host },
                             onRenameSession = { pendingRename = host to it },
                             onKillSession = { pendingKill = host to it },
@@ -330,6 +333,7 @@ private fun HostNode(
     onOpenFiles: () -> Unit,
     onOpenForward: () -> Unit,
     onEditHost: () -> Unit,
+    onDuplicateHost: () -> Unit,
     onDeleteHost: () -> Unit,
     onRenameSession: (TmuxSession) -> Unit,
     onKillSession: (TmuxSession) -> Unit,
@@ -361,6 +365,7 @@ private fun HostNode(
             onOpenFiles = onOpenFiles,
             onOpenForward = onOpenForward,
             onEdit = onEditHost,
+            onDuplicate = onDuplicateHost,
             onDelete = onDeleteHost,
         )
 
@@ -621,6 +626,7 @@ private fun HostRow(
     onOpenFiles: () -> Unit,
     onOpenForward: () -> Unit,
     onEdit: () -> Unit,
+    onDuplicate: () -> Unit,
     onDelete: () -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
@@ -674,6 +680,7 @@ private fun HostRow(
                         // 免得手指顺着往下滑一格就把主机删了
                         HorizontalDivider()
                         HostMenuItem(Icons.Default.Edit, R.string.edit, dismiss, onEdit)
+                        HostMenuItem(Icons.Default.ContentCopy, R.string.duplicate, dismiss, onDuplicate)
                         HostMenuItem(Icons.Default.Delete, R.string.delete, dismiss, onDelete)
                     }
                 }

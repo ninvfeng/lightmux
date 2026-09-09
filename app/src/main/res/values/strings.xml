@@ -8,6 +8,7 @@
     <string name="save">Save</string>
     <string name="delete">Delete</string>
     <string name="edit">Edit</string>
+    <string name="duplicate">Duplicate</string>
     <string name="close">Close</string>
     <string name="retry">Retry</string>
     <string name="refresh">Refresh</string>

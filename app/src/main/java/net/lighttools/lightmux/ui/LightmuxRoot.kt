@@ -270,8 +270,9 @@ fun LightmuxRoot() {
 
             is Screen.HostEdit -> {
                 // 按 hostId 分键：不这样的话，新建后再去编辑另一台会拿到上一次的表单。
-                val vm = rememberVm("hostEdit:${screen.hostId.orEmpty()}") {
-                    HostEditViewModel(app.hostStore, app.keyStore, screen.hostId)
+                // 复制单独占一个键——同一台主机的「编辑」和「复制」是两份不同的表单。
+                val vm = rememberVm("hostEdit:${screen.duplicate}:${screen.hostId.orEmpty()}") {
+                    HostEditViewModel(app.hostStore, app.keyStore, screen.hostId, screen.duplicate)
                 }
                 // 管理密钥的入口从表单里进来：跳去导完新钥匙回来，表单还在原样
                 HostEditScreen(
@@ -484,6 +485,10 @@ private fun HomeRoute(vm: HomeViewModel, nav: Navigator, onNavigate: () -> Unit 
         },
         onEditHost = {
             nav.push(Screen.HostEdit(it))
+            onNavigate()
+        },
+        onDuplicateHost = {
+            nav.push(Screen.HostEdit(it, duplicate = true))
             onNavigate()
         },
         onOpenMonitor = {

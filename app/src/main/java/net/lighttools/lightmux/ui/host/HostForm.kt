@@ -57,7 +57,8 @@ data class HostForm(
     /**
      * 落库前的转换。调用方须保证 [validate] 为空。
      *
-     * @param existing 编辑时的原记录，[keepSecret] 为真时从这里取回旧凭据
+     * @param existing **凭据的来源**，不一定是「要覆盖的那条记录」：[keepSecret] 为真时从这里
+     *                 取回旧凭据，而复制出来的表单也拿源主机当来源（见 [copyOf]）
      */
     fun toHost(existing: Host? = null): Host {
         val auth = when (authKind) {
@@ -72,7 +73,10 @@ data class HostForm(
         }
         val cleanHostname = hostname.trim()
         return Host(
-            id = existing?.id ?: id ?: UUID.randomUUID().toString(),
+            // 身份只认表单自己的 id，**不看 [existing]**：编辑时它由 [of] 从原记录带过来，
+            // 而复制时它被清成 null，必须落到一个新 UUID 上——这里退一步取 existing.id，
+            // 「复制」就变成了「覆盖源主机」。existing 在这个函数里只负责凭据。
+            id = id ?: UUID.randomUUID().toString(),
             // 名称留空就拿主机名顶上：列表里总得有东西可显示，逼用户起名字没必要。
             name = name.trim().ifBlank { cleanHostname },
             hostname = cleanHostname,
@@ -125,6 +129,25 @@ data class HostForm(
             loginCommand = host.loginCommand.orEmpty(),
             proxyJumpId = host.proxyJumpId,
         )
+
+        /**
+         * 以一台主机为模板新建一台：字段照搬，但 id 清成 null，保存时才落到新 UUID 上。
+         *
+         * 凭据也沿用源主机的（[keepSecret]）——一台机器上开两个账号、或同一个跳板机后面
+         * 一串配置相同的机器，是「复制」唯一的用处，逼用户把密码或整段 PEM 再输一遍就白复制了。
+         *
+         * @param taken 已有的主机名。列表就是靠名字认人的，复制出来的两行同名等于认不出来
+         */
+        fun copyOf(host: Host, taken: Collection<String>): HostForm =
+            of(host).copy(id = null, name = uniqueName(host.name, taken))
+
+        /** `web` → `web 2` → `web 3`。 */
+        private fun uniqueName(base: String, taken: Collection<String>): String {
+            if (base !in taken) return base
+            var index = 2
+            while ("$base $index" in taken) index++
+            return "$base $index"
+        }
 
         /** 凭据解密失败时 [Host.auth] 会退化成空串，那种情况必须逼用户重填，不能假装「已保存」。 */
         private val Host.hasSecret: Boolean

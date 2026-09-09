@@ -47,9 +47,15 @@ class HostEditViewModel(
     private val hostStore: HostStore,
     keyStore: SshKeyStore,
     private val hostId: String?,
+    /** 复制：拿 [hostId] 那台主机的字段当新建的初值，保存时落成新的一台，源主机不动。 */
+    private val duplicate: Boolean = false,
 ) : ViewModel() {
 
-    /** 编辑时的原记录。保存时要从它身上取回「用户没改」的凭据。 */
+    /**
+     * [hostId] 那条原记录。保存时要从它身上取回「用户没改」的凭据。
+     *
+     * 复制模式下它是**凭据的来源而不是要覆盖的目标**——两者的分工见 [HostForm.toHost]。
+     */
     private var existing: Host? = null
 
     var form by mutableStateOf(HostForm())
@@ -87,13 +93,23 @@ class HostEditViewModel(
 
     init {
         viewModelScope.launch {
-            existing = hostId?.let { hostStore.get(it) }
-            existing?.let { form = HostForm.of(it) }
+            if (hostId != null) {
+                // 一次快照两用：捞源主机，顺便拿全部主机名给复制出来的那台避重名
+                val all = hostStore.snapshot()
+                val host = all.firstOrNull { it.id == hostId }
+                existing = host
+                if (host != null) {
+                    form = if (duplicate) HostForm.copyOf(host, all.map { it.name })
+                    else HostForm.of(host)
+                }
+            }
             loaded = true
         }
         keyStore.keys.onEach { keys = it }.launchIn(viewModelScope)
         hostStore.hosts
-            .onEach { jumpCandidates = HostRoute.candidates(hostId, it) }
+            // 复制出来的是一台**还不存在**的主机，跳板候选按新建算：排除的是「自己」和
+            // 会绕回自己的那些，而这台谁也没引用过，源主机本身也可以拿来当跳板
+            .onEach { jumpCandidates = HostRoute.candidates(hostId.takeIf { !duplicate }, it) }
             .launchIn(viewModelScope)
     }
 

@@ -38,8 +38,13 @@ sealed interface Screen {
     /** 小文本文件的应用内编辑 */
     data class FileEdit(val hostId: String, val path: String) : Screen
 
-    /** 主机增改。hostId 为 null 表示新建 */
-    data class HostEdit(val hostId: String?) : Screen
+    /**
+     * 主机增改。hostId 为 null 表示新建。
+     *
+     * @param duplicate 以 hostId 那台主机为模板新建一台。**这个标记必须活过进程重建**：
+     *                  恢复成普通编辑的话，用户接着一保存就把源主机覆盖了
+     */
+    data class HostEdit(val hostId: String?, val duplicate: Boolean = false) : Screen
 
     /**
      * 内置浏览器，装的是转发出来的那个端口。
@@ -107,7 +112,8 @@ class Navigator(initial: List<Screen> = listOf(Screen.Home)) {
                         is Screen.About -> "about"
                         is Screen.Monitor -> "monitor:${screen.hostId}"
                         is Screen.Forward -> "forward:${screen.hostId}"
-                        is Screen.HostEdit -> "hostEdit:${screen.hostId.orEmpty()}"
+                        is Screen.HostEdit -> if (screen.duplicate) "hostCopy:${screen.hostId.orEmpty()}"
+                        else "hostEdit:${screen.hostId.orEmpty()}"
                         is Screen.Files -> "files:${screen.hostId}:${screen.path}"
                         // 网页只恢复地址，重新加载一遍。翻过的历史找不回来，但那比把用户
                         // 弹回主页强得多——何况本地端口页刷一下就是原样
@@ -129,6 +135,8 @@ class Navigator(initial: List<Screen> = listOf(Screen.Home)) {
                         s.startsWith("web:") -> Screen.Web(s.removePrefix("web:"))
                         s.startsWith("hostEdit:") ->
                             Screen.HostEdit(s.removePrefix("hostEdit:").ifEmpty { null })
+                        s.startsWith("hostCopy:") ->
+                            Screen.HostEdit(s.removePrefix("hostCopy:").ifEmpty { null }, duplicate = true)
                         s.startsWith("files:") -> {
                             val rest = s.removePrefix("files:")
                             val sep = rest.indexOf(':')
