@@ -841,14 +841,14 @@ fun TreeRow(
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(start = startInset + (level * 20).dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         // 整行都在 combinedClickable 里，这个图标不是独立触控目标，缩小没有误触代价。
         Icon(
             imageVector = leading,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(20.dp),
+            modifier = Modifier.size(18.dp),
         )
         Column(modifier = Modifier.weight(1f)) {
             Row(
