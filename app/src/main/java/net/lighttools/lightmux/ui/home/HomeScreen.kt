@@ -20,7 +20,10 @@ import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.LinkOff
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Monitor
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SettingsEthernet
@@ -584,6 +587,24 @@ private fun HostAction(icon: ImageVector, label: Int, onClick: () -> Unit) {
     }
 }
 
+/** 「更多」菜单里的一项。动作前先收菜单：留着它盖在新页面上，返回时还会看见一张浮层。 */
+@Composable
+private fun HostMenuItem(
+    icon: ImageVector,
+    label: Int,
+    onDismiss: () -> Unit,
+    onClick: () -> Unit,
+) {
+    DropdownMenuItem(
+        text = { Text(stringResource(label)) },
+        leadingIcon = { Icon(icon, contentDescription = null) },
+        onClick = {
+            onDismiss()
+            onClick()
+        },
+    )
+}
+
 /** 窗口名可以是空串（`rename-window ''`），那时只剩 index 也比显示一个「0: 」强。 */
 private fun windowLabel(window: TmuxWindow): String =
     if (window.name.isEmpty()) window.index.toString() else "${window.index}: ${window.name}"
@@ -603,52 +624,60 @@ private fun HostRow(
     onDelete: () -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
+    val dismiss = { menuOpen = false }
 
-    Box {
-        TreeRow(
-            level = 0,
-            leading = if (expanded) Icons.Default.KeyboardArrowDown else Icons.AutoMirrored.Filled.KeyboardArrowRight,
-            title = host.name,
-            subtitle = if (snapshot != null) "${host.endpoint} · $snapshot" else host.endpoint,
-            badge = if (activeSessions > 0) "●$activeSessions" else null,
-            onClick = onToggle,
-            onLongClick = { menuOpen = true },
-        ) {
-            /*
-             * 四格图标自己成一个 Row，不摊给 TreeRow 那层。
-             *
-             * 摊上去的话每格之间会多吃一份 8dp 的 spacedBy，四格连带多出 24dp，
-             * 标题从 144dp 掉到 120dp。这里贴着排，留给标题 144dp。
-             *
-             * 关掉 M3 强制的 48dp 最小触摸目标，[HostAction] 的 40dp 才落得下来——
-             * 不关的话四格实占 192dp，上面那笔账根本不成立。只关这一处；
-             * 树里其余的行尾按钮（展开、关闭）仍守 48dp。
-             */
-            CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
-                Row(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
-                    HostAction(Icons.Default.Terminal, R.string.terminal, onOpenTerminal)
-                    HostAction(Icons.Default.Monitor, R.string.monitor, onOpenMonitor)
-                    HostAction(Icons.Default.Folder, R.string.files, onOpenFiles)
-                    HostAction(Icons.Default.SettingsEthernet, R.string.home_forward, onOpenForward)
+    TreeRow(
+        level = 0,
+        leading = if (expanded) Icons.Default.KeyboardArrowDown else Icons.AutoMirrored.Filled.KeyboardArrowRight,
+        title = host.name,
+        subtitle = if (snapshot != null) "${host.endpoint} · $snapshot" else host.endpoint,
+        badge = if (activeSessions > 0) "●$activeSessions" else null,
+        onClick = onToggle,
+        onLongClick = { menuOpen = true },
+    ) {
+        /*
+         * 四格图标自己成一个 Row，不摊给 TreeRow 那层。
+         *
+         * 摊上去的话每格之间会多吃一份 8dp 的 spacedBy，四格连带多出 24dp，
+         * 标题从 144dp 掉到 120dp。这里贴着排，留给标题 144dp。
+         *
+         * 关掉 M3 强制的 48dp 最小触摸目标，[HostAction] 的 40dp 才落得下来——
+         * 不关的话四格实占 192dp，上面那笔账根本不成立。只关这一处；
+         * 树里其余的行尾按钮（展开、关闭）仍守 48dp。
+         */
+        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
+            Row(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
+                HostAction(Icons.Default.Terminal, R.string.terminal, onOpenTerminal)
+                HostAction(Icons.Default.Monitor, R.string.monitor, onOpenMonitor)
+                HostAction(Icons.Default.Folder, R.string.files, onOpenFiles)
+                /*
+                 * 第四格从端口转发换成「更多」：转发是这四个里用得最少的一个，
+                 * 却和终端/概览/文件占一样大的常驻面积。菜单锚在这一格上（Box 只裹它），
+                 * 长按行体开的是同一个菜单——右下角点出来的浮层跑到行首去是另一种迷惑。
+                 *
+                 * 菜单里把三个图标动作原样重列一遍：长按是这行唯一的「全部动作」入口，
+                 * 缺了它们就得让用户先记住哪些在图标里、哪些在菜单里。
+                 */
+                Box {
+                    HostAction(Icons.Default.MoreVert, R.string.more) { menuOpen = true }
+                    DropdownMenu(expanded = menuOpen, onDismissRequest = dismiss) {
+                        HostMenuItem(Icons.Default.Terminal, R.string.terminal, dismiss, onOpenTerminal)
+                        HostMenuItem(Icons.Default.Monitor, R.string.monitor, dismiss, onOpenMonitor)
+                        HostMenuItem(Icons.Default.Folder, R.string.files, dismiss, onOpenFiles)
+                        HostMenuItem(
+                            Icons.Default.SettingsEthernet,
+                            R.string.home_forward,
+                            dismiss,
+                            onOpenForward,
+                        )
+                        // 改主机配置和删主机跟上面四个「去某个页面」不是一类，隔开一道，
+                        // 免得手指顺着往下滑一格就把主机删了
+                        HorizontalDivider()
+                        HostMenuItem(Icons.Default.Edit, R.string.edit, dismiss, onEdit)
+                        HostMenuItem(Icons.Default.Delete, R.string.delete, dismiss, onDelete)
+                    }
                 }
             }
-        }
-
-        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.edit)) },
-                onClick = {
-                    menuOpen = false
-                    onEdit()
-                },
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.delete)) },
-                onClick = {
-                    menuOpen = false
-                    onDelete()
-                },
-            )
         }
     }
 }

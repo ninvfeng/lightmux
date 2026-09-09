@@ -275,7 +275,7 @@ private fun WebBottomBar(vm: WebViewModel, onClose: () -> Unit, onOpenExternal: 
                     Box {
                         BarIcon(
                             Icons.Default.MoreVert,
-                            stringResource(R.string.web_more),
+                            stringResource(R.string.more),
                             onClick = { menuOpen = true },
                         )
                         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {

@@ -13,6 +13,7 @@
     <string name="refresh">刷新</string>
     <string name="settings">设置</string>
     <string name="back">返回</string>
+    <string name="more">更多</string>
 
     <!-- 主页 -->
     <string name="hosts_empty">还没有主机，点右下角 + 添加</string>
@@ -361,7 +362,6 @@
     <string name="forward_hint_ignore">忽略</string>
 
     <!-- 内置浏览器 -->
-    <string name="web_more">更多</string>
     <string name="web_go_forward">前进</string>
     <string name="web_open_external">用外部浏览器打开</string>
 
