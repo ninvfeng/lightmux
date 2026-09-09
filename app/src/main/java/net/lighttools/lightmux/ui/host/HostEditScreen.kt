@@ -25,6 +25,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -47,7 +48,9 @@ import net.lighttools.lightmux.R
 import net.lighttools.lightmux.data.Host
 import net.lighttools.lightmux.data.SshKey
 import net.lighttools.lightmux.ui.common.BackButton
+import net.lighttools.lightmux.ui.common.ErrorBanner
 import net.lighttools.lightmux.ui.keys.PickKeyFileButton
+import net.lighttools.lightmux.ui.terminal.connectionFailureText
 
 /**
  * 主机增删改表单。按「基本 / 认证方式 / 高级」分三张卡片，卡片内一行一项、行间细分隔线。
@@ -74,21 +77,33 @@ fun HostEditScreen(
     Scaffold(
         modifier = modifier.fillMaxSize().imePadding(),
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        stringResource(
-                            if (isNew) R.string.host_edit_title_new else R.string.host_edit_title_edit
+            // 测试结果吊在标题栏下面而不是表单里：表单要滚两屏，结论跟着滚走就等于没有结论。
+            Column {
+                TopAppBar(
+                    title = {
+                        Text(
+                            stringResource(
+                                if (isNew) R.string.host_edit_title_new else R.string.host_edit_title_edit
+                            )
                         )
-                    )
-                },
-                navigationIcon = { BackButton(onDone) },
-                actions = {
-                    IconButton(onClick = { vm.save(onDone) }) {
-                        Icon(Icons.Default.Check, stringResource(R.string.save))
-                    }
-                },
-            )
+                    },
+                    navigationIcon = { BackButton(onDone) },
+                    actions = {
+                        TextButton(onClick = vm::testConnection, enabled = vm.test != HostTest.Running) {
+                            Text(
+                                stringResource(
+                                    if (vm.test == HostTest.Running) R.string.host_test_running
+                                    else R.string.host_test
+                                )
+                            )
+                        }
+                        IconButton(onClick = { vm.save(onDone) }) {
+                            Icon(Icons.Default.Check, stringResource(R.string.save))
+                        }
+                    },
+                )
+                TestResultBanner(vm.test)
+            }
         },
     ) { padding ->
         Column(
@@ -226,6 +241,36 @@ fun HostEditScreen(
             }
         }
     }
+}
+
+/**
+ * 「测试」的结论条。
+ *
+ * 失败复用终端页那套分类文案（[connectionFailureText]）：同一个失败在两处说法不一样，
+ * 用户会以为碰到的是两回事。成功时把主机公钥指纹一并摆出来——首次连接是 TOFU 静默记下的，
+ * 这里是用户唯一一次能拿它和 `ssh-keyscan` 对照的机会。
+ */
+@Composable
+private fun TestResultBanner(test: HostTest) = when (test) {
+    HostTest.Idle -> Unit
+
+    // 握手最长要 20 秒，只把按钮置灰的话这段时间里页面看着就是死的
+    HostTest.Running -> LinearProgressIndicator(Modifier.fillMaxWidth())
+
+    is HostTest.Ok -> Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+    ) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            Text(stringResource(R.string.host_test_ok), style = MaterialTheme.typography.bodyMedium)
+            test.fingerprint?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
+            }
+        }
+    }
+
+    is HostTest.Failed -> ErrorBanner(connectionFailureText(test.failure, test.endpoint))
 }
 
 /**

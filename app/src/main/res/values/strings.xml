@@ -114,6 +114,10 @@
     <string name="error_field_required">Required</string>
     <string name="error_port_invalid">Must be 1–65535</string>
     <string name="error_secret_required">Enter the credential</string>
+    <!-- 保存前先试连一次 -->
+    <string name="host_test">Test</string>
+    <string name="host_test_running">Testing…</string>
+    <string name="host_test_ok">Connection OK</string>
 
     <!-- 连接错误 -->
     <string name="error_connect_failed">Could not connect to %1$s</string>

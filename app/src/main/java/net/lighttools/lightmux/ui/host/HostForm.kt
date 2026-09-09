@@ -2,6 +2,7 @@ package net.lighttools.lightmux.ui.host
 
 import net.lighttools.lightmux.data.AuthMethod
 import net.lighttools.lightmux.data.Host
+import net.lighttools.lightmux.data.SshKey
 import java.util.UUID
 
 enum class AuthKind { Password, PrivateKey }
@@ -80,6 +81,29 @@ data class HostForm(
             auth = auth,
             loginCommand = loginCommand.trim().ifBlank { null },
             proxyJumpId = proxyJumpId,
+        )
+    }
+
+    /**
+     * 「测试连接」用的临时 [Host]，**不落库**。
+     *
+     * 和 [toHost] 只差密钥库那把钥匙的装配：落库时主机身上只写一个 keyId，PEM 由
+     * [net.lighttools.lightmux.data.HostStore] 读取时装配进来；而这里要连的是一份**还没进过库**
+     * 的表单，没人替它装，不自己装就是拿一把空私钥去撞服务端。
+     */
+    fun toTestHost(existing: Host? = null, keys: List<SshKey> = emptyList()): Host {
+        val host = toHost(existing)
+        val auth = host.auth
+        if (auth !is AuthMethod.PrivateKey || auth.keyId == null) return host
+        val key = keys.firstOrNull { it.id == auth.keyId }
+        return host.copy(
+            auth = auth.copy(
+                pem = key?.pem.orEmpty(),
+                passphrase = key?.passphrase,
+                // 钥匙被删了或它自己的密文解不开：和 StoreCodec.decodeAuth 走同一条路，
+                // 让失败说成「凭据解不开」而不是「认证失败」——后者会把人送去查用户名密码。
+                credentialLost = key == null || key.broken,
+            ),
         )
     }
 

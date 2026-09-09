@@ -232,7 +232,7 @@ private fun ConnectionFailureBanner(
     handle: TermSessionHandle,
     onEditHost: (hostId: String) -> Unit,
 ) {
-    val message = failureMessage(failure, handle.host.endpoint)
+    val message = connectionFailureText(failure, handle.host.endpoint)
     when (failure) {
         is ConnectionFailure.HostKeyChanged -> Unit
 
@@ -270,26 +270,4 @@ private fun ConnectionFailureBanner(
             onAction = handle::reconnect,
         )
     }
-}
-
-/**
- * 失败原因的文案。
- *
- * 和按钮分开，是因为 [ConnectionFailure.ProxyJumpFailed] 要把内层原因的文案**套进自己那句里**
- * （「经跳板机 bastion 失败：认证失败」），而按钮该指向哪台主机是另一回事。
- */
-@Composable
-private fun failureMessage(failure: ConnectionFailure, endpoint: String): String = when (failure) {
-    // 走对话框，不会渲染到 banner 上；给一句只是为了让 when 穷尽。
-    is ConnectionFailure.HostKeyChanged -> stringResource(R.string.error_host_key_trust_new)
-    ConnectionFailure.AuthFailed -> stringResource(R.string.error_auth_failed)
-    ConnectionFailure.CredentialLost -> stringResource(R.string.error_credential_lost)
-    ConnectionFailure.AgentUnsupported -> stringResource(R.string.error_auth_agent_unsupported)
-    ConnectionFailure.ExecTimeout -> stringResource(R.string.error_exec_timeout)
-    is ConnectionFailure.ProxyJumpFailed -> failure.jumpName?.let { name ->
-        stringResource(R.string.error_proxy_jump, name, failureMessage(failure.reason, endpoint))
-    } ?: stringResource(R.string.error_proxy_jump_broken)
-
-    is ConnectionFailure.Other -> failure.message
-        ?: stringResource(R.string.error_connect_failed, endpoint)
 }

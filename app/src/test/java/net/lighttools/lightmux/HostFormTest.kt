@@ -2,6 +2,7 @@ package net.lighttools.lightmux
 
 import net.lighttools.lightmux.data.AuthMethod
 import net.lighttools.lightmux.data.Host
+import net.lighttools.lightmux.data.SshKey
 import net.lighttools.lightmux.ui.host.AuthKind
 import net.lighttools.lightmux.ui.host.HostForm
 import net.lighttools.lightmux.ui.host.HostFormError
@@ -166,5 +167,30 @@ class HostFormTest {
             passphrase = "",
         ).toHost()
         assertEquals(AuthMethod.PrivateKey("-----BEGIN-----", null), host.auth)
+    }
+
+    @Test
+    fun `试连时把密钥库那把钥匙的 PEM 装配进来`() {
+        val form = valid().copy(authKind = AuthKind.PrivateKey, keyId = "k1")
+        val keys = listOf(SshKey(id = "k1", name = "work", pem = "PEM", passphrase = "pass"))
+
+        val auth = form.toTestHost(keys = keys).auth as AuthMethod.PrivateKey
+        assertEquals("PEM", auth.pem)
+        assertEquals("pass", auth.passphrase)
+        assertEquals("k1", auth.keyId)
+        assertTrue(!auth.credentialLost)
+        // 落库的那条路仍然只写 keyId，PEM 由 HostStore 读取时装配
+        assertEquals("", (form.toHost().auth as AuthMethod.PrivateKey).pem)
+    }
+
+    @Test
+    fun `试连时钥匙没了算凭据丢失而不是认证失败`() {
+        val form = valid().copy(authKind = AuthKind.PrivateKey, keyId = "k1")
+
+        // 钥匙被删（列表里找不到）和钥匙自己的密文解不开（PEM 为空）是同一种下场
+        val gone = form.toTestHost().auth as AuthMethod.PrivateKey
+        assertTrue(gone.credentialLost)
+        val broken = form.toTestHost(keys = listOf(SshKey(id = "k1", name = "work", pem = "")))
+        assertTrue((broken.auth as AuthMethod.PrivateKey).credentialLost)
     }
 }

@@ -109,6 +109,10 @@
     <string name="error_field_required">必填</string>
     <string name="error_port_invalid">端口需在 1–65535 之间</string>
     <string name="error_secret_required">请填写凭据</string>
+    <!-- 保存前先试连一次 -->
+    <string name="host_test">测试</string>
+    <string name="host_test_running">测试中…</string>
+    <string name="host_test_ok">连接成功</string>
 
     <!-- 连接错误 -->
     <string name="error_connect_failed">连不上 %1$s</string>

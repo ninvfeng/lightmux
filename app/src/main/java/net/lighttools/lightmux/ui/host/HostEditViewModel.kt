@@ -7,9 +7,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import net.lighttools.lightmux.data.AuthMethod
 import net.lighttools.lightmux.data.Host
 import net.lighttools.lightmux.data.HostRoute
@@ -18,7 +20,23 @@ import net.lighttools.lightmux.data.KeyFormat
 import net.lighttools.lightmux.data.PemFile
 import net.lighttools.lightmux.data.SshKey
 import net.lighttools.lightmux.data.SshKeyStore
+import net.lighttools.lightmux.ssh.SshConnection
 import net.lighttools.lightmux.ui.keys.KeyFileError
+import net.lighttools.lightmux.ui.terminal.ConnectionFailure
+
+/** 「保存前先试一次」的结果。 */
+sealed interface HostTest {
+
+    data object Idle : HostTest
+
+    data object Running : HostTest
+
+    /** @param fingerprint 这次握手拿到的主机公钥指纹，用户可以直接和 `ssh-keyscan` 的输出对照 */
+    data class Ok(val fingerprint: String?) : HostTest
+
+    /** @param endpoint 说不出具体原因时（[ConnectionFailure.Other]）文案要用它 */
+    data class Failed(val failure: ConnectionFailure, val endpoint: String) : HostTest
+}
 
 /**
  * 主机增改。
@@ -54,6 +72,18 @@ class HostEditViewModel(
     /** 能选作跳板机的主机。会绕成环的那些在这一步就被排掉，不留到保存时才报错。 */
     var jumpCandidates by mutableStateOf(emptyList<Host>())
         private set
+
+    /** 「测试」的结果。表单一改就作废——改完还挂着上一次的「连接成功」是彻头彻尾的误导。 */
+    var test by mutableStateOf<HostTest>(HostTest.Idle)
+        private set
+
+    /**
+     * 正在试连的那条连接。**必须自己攥着**：[SshConnection.connectBlocking] 阻塞在 socket 上，
+     * 协程 cancel 打断不了阻塞 IO，页面关掉时只有 close 能把它踹醒；不然一台连不上的主机
+     * 能让这条握手在后台再挂 20 秒。
+     */
+    @Volatile
+    private var probe: SshConnection? = null
 
     init {
         viewModelScope.launch {
@@ -96,8 +126,50 @@ class HostEditViewModel(
         }
     }
 
+    /**
+     * 拿当前表单**试连一次**，不落库。
+     *
+     * 存在的理由：填错一个字（端口、用户名、粘漏半行 PEM）以前要等到保存、回主页、开会话
+     * 才看得到一句「认证失败」，而那时人已经离开表单了。
+     */
+    fun testConnection() {
+        if (test == HostTest.Running) return
+        val found = form.validate()
+        errors = found
+        if (found.isNotEmpty()) return
+        // 引用密钥库时得把 PEM 装配进来：这份表单还没进过库，没人替它装（见 HostForm.toTestHost）
+        val host = form.toTestHost(existing, keys)
+        test = HostTest.Running
+        viewModelScope.launch {
+            test = withContext(Dispatchers.IO) {
+                val connection = SshConnection(host).also { probe = it }
+                try {
+                    // 连上 + 认证通过就够了：网络、主机密钥、凭据、跳板链全在这一步里验完，
+                    // 再跑一条命令只是多开一个 channel，验不出新东西。
+                    connection.connectBlocking()
+                    HostTest.Ok(connection.hostFingerprint)
+                } catch (e: Exception) {
+                    HostTest.Failed(
+                        ConnectionFailure.of(e) ?: ConnectionFailure.Other(null),
+                        host.endpoint,
+                    )
+                } finally {
+                    probe = null
+                    connection.close()
+                }
+            }
+        }
+    }
+
+    override fun onCleared() {
+        // 页面关了，这条试连没人要了。cancel 打不断阻塞的握手，close 才能。
+        probe?.close()
+    }
+
     fun update(transform: (HostForm) -> HostForm) {
         form = transform(form)
+        // 改了任何一个字段，上一次的测试结论就不再是关于这份表单的了
+        if (test != HostTest.Idle) test = HostTest.Idle
         // 已经报过错就实时清，别让用户改完还盯着一片红。
         if (errors.isNotEmpty()) errors = form.validate()
     }
