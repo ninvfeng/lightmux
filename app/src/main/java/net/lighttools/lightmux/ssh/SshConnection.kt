@@ -8,7 +8,6 @@ import net.lighttools.lightmux.data.AuthMethod
 import net.lighttools.lightmux.data.Host
 import net.lighttools.lightmux.data.HostRoute
 import net.schmizz.keepalive.KeepAliveProvider
-import net.schmizz.sshj.AndroidConfig
 import net.schmizz.sshj.Config
 import net.schmizz.sshj.SSHClient
 import net.schmizz.sshj.common.Factory
@@ -391,12 +390,13 @@ class SshConnection(
         /**
          * Config 构造一次要跑完整的算法工厂初始化（几十毫秒），且是只读的，全进程共用一份。
          *
-         * 用 [AndroidConfig] 而不是 DefaultConfig：后者会去探测一批 JDK 上才有的密钥算法，
-         * 在 Android 上要么慢要么直接 NoClassDefFoundError。
+         * 用 [LightmuxSshConfig]（sshj 的 AndroidConfig + 补回被削掉的公钥算法）而不是
+         * DefaultConfig：后者会去探测一批 JDK 上才有的密钥算法，在 Android 上要么慢
+         * 要么直接 NoClassDefFoundError。
          */
         private val sharedConfig: Config by lazy {
             ensureSecurityProvider()
-            AndroidConfig().apply {
+            LightmuxSshConfig().apply {
                 // 移动网络断了不会立刻给 FIN，不发心跳的话断线要等到用户下一次敲键才被发现。
                 keepAliveProvider = KeepAliveProvider.HEARTBEAT
             }
