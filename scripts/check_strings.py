@@ -27,11 +27,11 @@ ZH = ROOT / "app/src/main/res/values-zh/strings.xml"
 # 两种语言下故意写成同一个值的 key。
 # 键帽（Esc/Tab/Ctrl/Alt）是键盘上印的字，翻译了反而对不上实体键；
 # 字号样例是条真能敲的 shell 命令，翻译完就不是命令了；
-# 产品名、配色方案名、语言自称是专有名词；许可正文翻译后没有法律效力。
+# 产品名、配色方案名、语言自称是专有名词（CPU / GPU 这类缩写中文里也照写）；许可正文翻译后没有法律效力。
 SAME_VALUE_OK = {
     "app_name",
     "key_esc", "key_tab", "key_ctrl", "key_alt",
-    "monitor_cpu", "monitor_sort_cpu",
+    "monitor_cpu", "monitor_gpu", "monitor_sort_cpu",
     "settings_language_zh", "settings_language_en",
     "settings_palette_solarized_dark", "settings_palette_gruvbox_dark",
     "settings_text_size_sample",
