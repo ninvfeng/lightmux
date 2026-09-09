@@ -147,3 +147,7 @@ fun DragHandle(
             .size(24.dp),
     )
 }
+
+/** 拖动排序用的顺序调整：把下标 [from] 的元素挪到 [to]。 */
+internal fun <T> List<T>.moved(from: Int, to: Int): List<T> =
+    toMutableList().also { it.add(to, it.removeAt(from)) }

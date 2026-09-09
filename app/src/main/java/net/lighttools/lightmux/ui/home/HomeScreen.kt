@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
@@ -70,8 +71,12 @@ import net.lighttools.lightmux.tmux.TmuxSession
 import net.lighttools.lightmux.tmux.TmuxWindow
 import net.lighttools.lightmux.ui.common.AddFab
 import net.lighttools.lightmux.ui.common.ConfirmDialog
+import net.lighttools.lightmux.ui.common.DragHandle
 import net.lighttools.lightmux.ui.common.ErrorBanner
 import net.lighttools.lightmux.ui.common.InputDialog
+import net.lighttools.lightmux.ui.common.moved
+import net.lighttools.lightmux.ui.common.rememberReorderState
+import net.lighttools.lightmux.ui.common.reorderableRow
 
 /**
  * 主页：**主机 → tmux 会话 → 窗口** 三级树，也是整个 app 唯一的常驻页面（PRD §4.1）。
@@ -98,6 +103,9 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
 ) {
     val hosts by vm.hosts.collectAsState()
+    val hostReorder = rememberReorderState()
+    // 拖动中只改本地这份，松手才落盘；同 QuickCommandsSheet 那一套
+    var hostOrder by remember(hosts) { mutableStateOf(hosts) }
     val sessions by vm.liveSessions.collectAsState()
     // 裸会话在 VM 里就按主机分好组，行里只查表——每行各 filter 一遍是 O(主机数 × 会话数)
     val bareSessions by vm.bareSessionsByHost.collectAsState()
@@ -188,27 +196,38 @@ fun HomeScreen(
                         item(key = KEY_CONNECTED_DIVIDER) { HorizontalDivider() }
                     }
 
-                    items(hosts, key = { it.id }) { host ->
-                        HostNode(
-                            host = host,
-                            vm = vm,
-                            bareSessions = bareSessions[host.id].orEmpty(),
-                            activeSessions = activeCounts[host.id] ?: 0,
-                            onOpenTerminal = onOpenTerminal,
-                            onOpenMonitor = { onOpenMonitor(host.id) },
-                            onOpenFiles = { onOpenFiles(host.id) },
-                            onOpenForward = { onOpenForward(host.id) },
-                            onEditHost = { onEditHost(host.id) },
-                            onDuplicateHost = { onDuplicateHost(host.id) },
-                            onDeleteHost = { pendingDelete = host },
-                            onRenameSession = { pendingRename = host to it },
-                            onKillSession = { pendingKill = host to it },
-                            onKillWindow = { _, window -> pendingKillWindow = host to window },
-                            onNewSession = { pendingNewSession = host },
-                            onInstallTmux = {
-                                vm.installCommand(host.id)?.let { pendingInstall = host to it }
-                            },
-                        )
+                    // 不设 key：拖动中列表一直在重排，按 key 复用会把正在收手势的节点搬走（同 QuickKeysSheet）
+                    itemsIndexed(hostOrder) { index, host ->
+                        Row(modifier = Modifier.fillMaxWidth().reorderableRow(hostReorder, index)) {
+                            DragHandle(
+                                state = hostReorder,
+                                index = index,
+                                lastIndex = hostOrder.lastIndex,
+                                onMove = { from, to -> hostOrder = hostOrder.moved(from, to) },
+                                onDrop = { vm.reorderHosts(hostOrder) },
+                            )
+                            HostNode(
+                                modifier = Modifier.weight(1f),
+                                host = host,
+                                vm = vm,
+                                bareSessions = bareSessions[host.id].orEmpty(),
+                                activeSessions = activeCounts[host.id] ?: 0,
+                                onOpenTerminal = onOpenTerminal,
+                                onOpenMonitor = { onOpenMonitor(host.id) },
+                                onOpenFiles = { onOpenFiles(host.id) },
+                                onOpenForward = { onOpenForward(host.id) },
+                                onEditHost = { onEditHost(host.id) },
+                                onDuplicateHost = { onDuplicateHost(host.id) },
+                                onDeleteHost = { pendingDelete = host },
+                                onRenameSession = { pendingRename = host to it },
+                                onKillSession = { pendingKill = host to it },
+                                onKillWindow = { _, window -> pendingKillWindow = host to window },
+                                onNewSession = { pendingNewSession = host },
+                                onInstallTmux = {
+                                    vm.installCommand(host.id)?.let { pendingInstall = host to it }
+                                },
+                            )
+                        }
                     }
                 }
             }
@@ -328,6 +347,7 @@ private fun HostNode(
     vm: HomeViewModel,
     bareSessions: List<TermSessionHandle>,
     activeSessions: Int,
+    modifier: Modifier = Modifier,
     onOpenTerminal: (String) -> Unit,
     onOpenMonitor: () -> Unit,
     onOpenFiles: () -> Unit,
@@ -352,7 +372,7 @@ private fun HostNode(
     val expanded by remember(vm, host.id) { derivedStateOf { host.id in vm.expandedHosts } }
     val state by remember(vm, host.id) { derivedStateOf { vm.stateOf(host.id) } }
 
-    Column {
+    Column(modifier) {
         HostRow(
             host = host,
             expanded = expanded,

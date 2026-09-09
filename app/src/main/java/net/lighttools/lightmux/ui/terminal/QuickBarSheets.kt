@@ -61,6 +61,7 @@ import net.lighttools.lightmux.data.QuickKey
 import net.lighttools.lightmux.data.QuickKeySize
 import net.lighttools.lightmux.data.QuickSlot
 import net.lighttools.lightmux.ui.common.DragHandle
+import net.lighttools.lightmux.ui.common.moved
 import net.lighttools.lightmux.ui.common.rememberReorderState
 import net.lighttools.lightmux.ui.common.reorderableRow
 
@@ -545,6 +546,3 @@ private val NEW_CUSTOM_KEY = QuickCustomKey(id = "", label = "", text = "")
 private fun <T> List<T>.without(index: Int): List<T> = toMutableList().also { it.removeAt(index) }
 
 private fun <T> List<T>.replaced(index: Int, value: T): List<T> = toMutableList().also { it[index] = value }
-
-private fun <T> List<T>.moved(from: Int, to: Int): List<T> =
-    toMutableList().also { it.add(to, it.removeAt(from)) }

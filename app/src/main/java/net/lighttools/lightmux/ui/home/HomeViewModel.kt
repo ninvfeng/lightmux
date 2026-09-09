@@ -409,6 +409,11 @@ class HomeViewModel(
         }
     }
 
+    /** 拖拽排序落盘：整表按新顺序覆盖，见 [HostStore.replaceAll]。 */
+    fun reorderHosts(newOrder: List<Host>) {
+        viewModelScope.launch { hostStore.replaceAll(newOrder) }
+    }
+
     private fun liveAttachment(hostId: String, name: String): TermSessionHandle? =
         sessions.forHost(hostId).firstOrNull {
             it.tmuxSession == name && it.state.value != SessionState.Disconnected
