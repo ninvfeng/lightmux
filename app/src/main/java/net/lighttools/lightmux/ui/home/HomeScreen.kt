@@ -601,17 +601,17 @@ private fun WindowRow(window: TmuxWindow, onClick: () -> Unit, onKill: () -> Uni
 /**
  * 主机行尾的一格动作。
  *
- * 40dp 而不是 M3 默认的 48dp：四格一起 160dp，360dp 屏上标题还剩 144dp，够放一个像样的主机名。
- * 再小就真按不准了——40dp 已经是 Material 触摸目标的下限。
+ * 36dp 而不是 M3 默认的 48dp：四格一起 144dp，360dp 屏上标题还能多剩 16dp。
+ * 零间距排布下再小就真按不准了，36dp 是能接受的下限。
  *
- * **这 40dp 只有配合调用处那个 [LocalMinimumInteractiveComponentSize] 覆盖才作数**：
- * 不关的话 `size(40.dp)` 只缩得动画出来的那一格，布局上每格仍占 48dp，
+ * **这 36dp 只有配合调用处那个 [LocalMinimumInteractiveComponentSize] 覆盖才作数**：
+ * 不关的话 `size(36.dp)` 只缩得动画出来的那一格，布局上每格仍占 48dp，
  * 四格实占 192dp，标题被压到 112dp——和快捷栏、文件页路径栏踩的是同一个坑。
  */
 @Composable
 private fun HostAction(icon: ImageVector, label: Int, onClick: () -> Unit) {
-    IconButton(onClick = onClick, modifier = Modifier.size(40.dp)) {
-        Icon(icon, stringResource(label), modifier = Modifier.size(22.dp))
+    IconButton(onClick = onClick, modifier = Modifier.size(36.dp)) {
+        Icon(icon, stringResource(label), modifier = Modifier.size(20.dp))
     }
 }
 
@@ -841,12 +841,14 @@ fun TreeRow(
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(start = startInset + (level * 20).dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
+        // 整行都在 combinedClickable 里，这个图标不是独立触控目标，缩小没有误触代价。
         Icon(
             imageVector = leading,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp),
         )
         Column(modifier = Modifier.weight(1f)) {
             Row(

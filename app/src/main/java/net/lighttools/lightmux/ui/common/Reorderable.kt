@@ -142,8 +142,8 @@ fun DragHandle(
                     state.drag(drag.y, rowHeight, currentLast, currentMove)
                 }
             }
-            // padding 在 pointerInput 之后：手势区域按 48dp 算，画出来的图标只有 24dp
-            .padding(12.dp)
+            // padding 在 pointerInput 之后：手势区域按 40dp 算，画出来的图标只有 24dp
+            .padding(8.dp)
             .size(24.dp),
     )
 }
