@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SettingsEthernet
+import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
@@ -38,6 +39,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -139,6 +141,15 @@ fun HomeScreen(
                     IconButton(onClick = vm::refreshExpanded) {
                         Icon(Icons.Default.Refresh, stringResource(R.string.refresh))
                     }
+                    IconButton(onClick = vm::toggleReordering) {
+                        Icon(
+                            Icons.Default.SwapVert,
+                            stringResource(R.string.reorder_hosts),
+                            // 模式类按钮必须自己说明自己开着——退出的唯一入口就是再点它一次
+                            tint = if (vm.reordering) MaterialTheme.colorScheme.primary
+                            else LocalContentColor.current,
+                        )
+                    }
                     IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Default.Settings, stringResource(R.string.settings))
                     }
@@ -202,13 +213,15 @@ fun HomeScreen(
                             modifier = Modifier.fillMaxWidth().reorderableRow(hostReorder, index),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            DragHandle(
-                                state = hostReorder,
-                                index = index,
-                                lastIndex = hostOrder.lastIndex,
-                                onMove = { from, to -> hostOrder = hostOrder.moved(from, to) },
-                                onDrop = { vm.reorderHosts(hostOrder) },
-                            )
+                            if (vm.reordering) {
+                                DragHandle(
+                                    state = hostReorder,
+                                    index = index,
+                                    lastIndex = hostOrder.lastIndex,
+                                    onMove = { from, to -> hostOrder = hostOrder.moved(from, to) },
+                                    onDrop = { vm.reorderHosts(hostOrder) },
+                                )
+                            }
                             HostNode(
                                 modifier = Modifier.weight(1f),
                                 host = host,

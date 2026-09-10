@@ -102,6 +102,24 @@ class HomeViewModel(
     var expandedHosts by mutableStateOf(emptySet<String>())
         private set
 
+    /** 排序模式：拖拽把手只在这个模式下出现。 */
+    var reordering by mutableStateOf(false)
+        private set
+
+    fun toggleReordering() {
+        reordering = !reordering
+        // 进排序模式先全折叠：DragHandle 的「拖过一格没有」用的是父布局高度，
+        // 而展开的主机那个高度是整棵子树的，拖起来会乱跳。顺带让列表短到一屏够得着。
+        if (reordering) collapseAll()
+    }
+
+    private fun collapseAll() {
+        val ids = expandedHosts
+        if (ids.isEmpty()) return
+        expandedHosts = emptySet()
+        viewModelScope.launch { ids.forEach { tmux.release(it) } }
+    }
+
     /** 展开了窗口的 tmux 会话，键见 [sessionKey]。 */
     var expandedSessions by mutableStateOf(emptySet<String>())
         private set

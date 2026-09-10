@@ -25,6 +25,7 @@
     <string name="new_terminal">New terminal</string>
     <string name="close_session">Close session</string>
     <string name="disconnect_all">Disconnect all</string>
+    <string name="reorder_hosts">Reorder hosts</string>
     <plurals name="disconnect_all_message">
         <item quantity="one">%1$d live session will be closed. tmux sessions keep running on the server.</item>
         <item quantity="other">%1$d live sessions will be closed. tmux sessions keep running on the server.</item>
