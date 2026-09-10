@@ -32,7 +32,6 @@ import androidx.compose.material.icons.filled.SettingsEthernet
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -46,6 +45,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
@@ -76,6 +77,7 @@ import net.lighttools.lightmux.ui.common.ConfirmDialog
 import net.lighttools.lightmux.ui.common.DragHandle
 import net.lighttools.lightmux.ui.common.ErrorBanner
 import net.lighttools.lightmux.ui.common.InputDialog
+import net.lighttools.lightmux.ui.common.Spinner
 import net.lighttools.lightmux.ui.common.moved
 import net.lighttools.lightmux.ui.common.rememberReorderState
 import net.lighttools.lightmux.ui.common.reorderableRow
@@ -182,11 +184,38 @@ fun HomeScreen(
                 return@Column
             }
 
+            val pullState = rememberPullToRefreshState()
+            // vm.refreshing 是 derivedStateOf：这里在 LazyColumn 外层，直接读探测状态的话
+            // 任何一台主机探测一次都要把整张列表重组一遍。
+            // 提成局部 val 还让下面的 indicator lambda 只捕获 Boolean 和 @Stable 的
+            // pullState，能被 Compose 记忆化。
+            val refreshing = vm.refreshing
             PullToRefreshBox(
-                // vm.refreshing 是 derivedStateOf：这里在 LazyColumn 外层，直接读探测状态的话
-                // 任何一台主机探测一次都要把整张列表重组一遍
-                isRefreshing = vm.refreshing,
+                isRefreshing = refreshing,
                 onRefresh = vm::refreshExpanded,
+                state = pullState,
+                // 自绘指示器：下拉阶段弧长跟手，松手转成匀速自转。松手那一刻
+                // distanceFraction≈1、自转起始角也是 -90°，两条弧重合，切换看不出来。
+                indicator = {
+                    PullToRefreshDefaults.IndicatorBox(
+                        state = pullState,
+                        isRefreshing = refreshing,
+                        modifier = Modifier.align(Alignment.TopCenter),
+                        // 1.4.0 这个参数默认是 Color.Unspecified 且不兜底，不显式给就没有底色
+                        containerColor = PullToRefreshDefaults.indicatorContainerColor,
+                    ) {
+                        // 类型必须显式写：`else { pullState.distanceFraction }` 会被解析成
+                        // 代码块而不是 lambda，标了类型才在编译期挡下来
+                        val pullProgress: (() -> Float)? =
+                            if (refreshing) null else { { pullState.distanceFraction } }
+                        Spinner(
+                            modifier = Modifier.size(16.dp),
+                            color = PullToRefreshDefaults.indicatorColor,
+                            strokeWidth = 2.5.dp,
+                            progress = pullProgress,
+                        )
+                    }
+                },
             ) {
                 LazyColumn(state = vm.listState, modifier = Modifier.fillMaxSize()) {
                     /*
@@ -480,7 +509,7 @@ fun TmuxStatusRow(
             title = stringResource(R.string.tmux_loading),
             onClick = {},
             trailing = {
-                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                Spinner(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
             },
         )
 

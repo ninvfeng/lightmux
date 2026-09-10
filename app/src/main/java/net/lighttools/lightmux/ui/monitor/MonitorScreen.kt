@@ -19,7 +19,6 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -63,6 +62,7 @@ import net.lighttools.lightmux.monitor.formatPercent
 import net.lighttools.lightmux.monitor.formatRate
 import net.lighttools.lightmux.ui.common.BackButton
 import net.lighttools.lightmux.ui.common.ErrorBanner
+import net.lighttools.lightmux.ui.common.Spinner
 import net.lighttools.lightmux.ui.common.copyToClipboard
 
 /**
@@ -170,7 +170,7 @@ private fun MonitorBody(vm: MonitorViewModel, modifier: Modifier = Modifier) {
             }
 
             // 首次进入只有 loading；之后失败时保留上一次的数据继续显示
-            state.snapshot == null -> if (state.loading) Centered { CircularProgressIndicator() }
+            state.snapshot == null -> if (state.loading) Centered { Spinner() }
 
             else -> Metrics(
                 snapshot = state.snapshot,

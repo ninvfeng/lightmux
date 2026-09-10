@@ -24,7 +24,6 @@ import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -69,6 +68,7 @@ import net.lighttools.lightmux.ui.common.BackButton
 import net.lighttools.lightmux.ui.common.BackgroundLimitBanner
 import net.lighttools.lightmux.ui.common.ConfirmDialog
 import net.lighttools.lightmux.ui.common.ErrorBanner
+import net.lighttools.lightmux.ui.common.Spinner
 
 /**
  * 端口转发。服务端起在 `127.0.0.1` 上的服务，经这里映射到手机本地端口。
@@ -200,7 +200,7 @@ fun ForwardSheet(vm: ForwardViewModel, onDismiss: () -> Unit, onOpenWeb: (String
 private fun ProbeAction(vm: ForwardViewModel) {
     IconButton(onClick = vm::probe, enabled = !vm.probing) {
         if (vm.probing) {
-            CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+            Spinner(Modifier.size(20.dp), strokeWidth = 2.dp)
         } else {
             Icon(Icons.Default.Refresh, stringResource(R.string.forward_probe))
         }

@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Save
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -32,6 +31,7 @@ import net.lighttools.lightmux.sftp.SftpRepository
 import net.lighttools.lightmux.ui.common.BackButton
 import net.lighttools.lightmux.ui.common.ConfirmDialog
 import net.lighttools.lightmux.ui.common.ErrorBanner
+import net.lighttools.lightmux.ui.common.Spinner
 import net.lighttools.lightmux.ui.theme.MonoFamily
 
 /**
@@ -78,7 +78,7 @@ fun FileEditScreen(
                 },
                 actions = {
                     if (vm.saving) {
-                        CircularProgressIndicator(modifier = Modifier.padding(12.dp).size(20.dp))
+                        Spinner(modifier = Modifier.padding(12.dp).size(20.dp), strokeWidth = 2.dp)
                     } else {
                         IconButton(onClick = vm::save, enabled = vm.dirty) {
                             Icon(Icons.Default.Save, stringResource(R.string.save))
@@ -100,7 +100,7 @@ fun FileEditScreen(
             }
 
             when {
-                vm.loading -> Centered { CircularProgressIndicator() }
+                vm.loading -> Centered { Spinner() }
 
                 vm.tooLarge != null -> Centered {
                     Notice(

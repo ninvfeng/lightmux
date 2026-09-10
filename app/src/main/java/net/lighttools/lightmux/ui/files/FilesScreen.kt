@@ -37,7 +37,6 @@ import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -86,6 +85,7 @@ import net.lighttools.lightmux.ui.common.ConfirmDialog
 import net.lighttools.lightmux.ui.common.ErrorBanner
 import net.lighttools.lightmux.ui.common.copyToClipboard
 import net.lighttools.lightmux.ui.common.InputDialog
+import net.lighttools.lightmux.ui.common.Spinner
 import net.lighttools.lightmux.ui.home.TreeRow
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -303,7 +303,7 @@ private fun FilesContent(
                 !state.loaded && state.loading -> Box(
                     Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center,
-                ) { CircularProgressIndicator() }
+                ) { Spinner() }
 
                 entries.isEmpty() && state.loaded -> Box(
                     Modifier.fillMaxSize(),
