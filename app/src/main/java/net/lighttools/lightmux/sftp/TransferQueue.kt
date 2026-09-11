@@ -61,16 +61,16 @@ class TransferQueue(
 
     private val handles = ConcurrentHashMap<String, Handle>()
 
-    /** 一次传输的「活」部分：取消标记、正在读写的本地流、协程。这些都不能进 [Transfer] 快照。 */
-    private class Handle {
+    /**
+     * 一次传输的「活」部分：取消标记、正在读写的本地流、协程。这些都不能进 [Transfer] 快照。
+     *
+     * [stream] 是构造参数而不是类内新建：目录预检要在还没有 Handle 的时候就遍历完本地树，
+     * 而 `SafSource` 的「流开了」回调在 walk 的当下就被烘进每个文件里了。
+     * 把同一个 ref 在入队时交给 Handle，取消才关得掉正在读的那个流（否则整棵树都取消不掉）。
+     */
+    private class Handle(val stream: AtomicReference<Closeable?> = AtomicReference(null)) {
 
         val cancelled = AtomicBoolean(false)
-
-        /**
-         * 正在读写的本地流。取消时直接关掉它——只改状态标记的话，
-         * 卡在 socket 上的那次读写会一直挂着，用户看到的是「已取消」但流量还在跑。
-         */
-        val stream = AtomicReference<Closeable?>(null)
 
         @Volatile
         var job: Job? = null
@@ -82,8 +82,8 @@ class TransferQueue(
         }
     }
 
-    /** 上传一个 SAF 选中的文件到 [remoteDir]。 */
-    fun upload(host: Host, uri: Uri, remoteDir: String) {
+    /** 上传一个 SAF 选中的文件到 [remoteDir]。只由 [submit] 调——外部入口一律先过预检。 */
+    private fun upload(host: Host, uri: Uri, remoteDir: String) {
         scope.launch(Dispatchers.Main.immediate) {
             intake.withLock {
                 val (name, size) = withContext(Dispatchers.IO) {
@@ -104,27 +104,48 @@ class TransferQueue(
         }
     }
 
+    /** 多选文件的预检：查名字 + 列一次目标目录。 */
+    suspend fun scanFiles(host: Host, uris: List<Uri>, remoteDir: String): UploadPlan.Files {
+        val picked = withContext(Dispatchers.IO) { uris.map { Picked(it, displayName(it)) } }
+        val existing = repository.listNames(host, remoteDir)?.names.orEmpty()
+        return UploadPlan.Files(host, remoteDir, picked, picked.mapNotNull { it.name }.filter { it in existing })
+    }
+
+    /** 目录的预检：遍历本地树 + 逐层探测远端。整个流程里最慢的一段。 */
+    suspend fun scanFolder(host: Host, treeUri: Uri, remoteDir: String): UploadPlan.Folder {
+        val name = withContext(Dispatchers.IO) { SafTree.rootName(resolver, treeUri) } ?: fallbackName()
+        // ref 先于 Handle 存在：预检时还没有 Handle，但 SafSource 要在 walk 的当下就把回调烘进去
+        val streams = AtomicReference<Closeable?>(null)
+        val tree = SafTree.walk(resolver, treeUri) { streams.set(it) }
+        val root = SftpPath.join(remoteDir, name)
+        val hit = UploadConflicts.find(listOf("") + tree.directories, tree.files.map { it.path }) {
+            repository.listNames(host, SftpPath.join(root, it))     // join(root, "") == root
+        }
+        return UploadPlan.Folder(
+            host, name, root, tree, streams,
+            tree.files.mapNotNull { f -> f.path.takeIf(hit::contains) },   // 按遍历顺序，读起来才像目录结构
+        )
+    }
+
     /**
-     * 上传一个 SAF 选中的目录：在 [remoteDir] 下建同名目录，递归上传其中的文件与子目录。
+     * 用户拍板后把计划落成传输。
      *
-     * 根目录名的查询放 [intake]（快，一次跨进程 query）；**真正的遍历放进 [enqueue] 的
-     * body（拿到 [lane] 之后）**，不放 intake——遍历要逐层跨进程 query，慢 provider 上
-     * 能到几十秒，压在入队闸门里就是点完整个界面先卡住（理由同 [intake] 的注释）。
-     *
-     * 遍历完成前 `totalBytes == 0`，`Transfer.ratio` 因此是 null，现有的不定长进度条
-     * 自动表现为「扫描中」；遍历完再把 totalBytes 补上，切成确定长度的进度条。
+     * @param overwrite true = 同名的照传（服务端 WRITE|CREAT|TRUNC 覆盖），false = 同名的跳过、其余照传
      */
-    fun uploadTree(host: Host, treeUri: Uri, remoteDir: String) {
-        scope.launch(Dispatchers.Main.immediate) {
-            intake.withLock {
-                val name = withContext(Dispatchers.IO) {
-                    SafTree.rootName(resolver, treeUri) ?: fallbackName()
-                }
-                val transfer = newTransfer(host, TransferDirection.UPLOAD, name, totalBytes = 0)
-                enqueue(transfer) { handle ->
-                    val tree = SafTree.walk(resolver, treeUri) { stream -> handle.stream.set(stream) }
-                    update(transfer.id) { it.copy(totalBytes = tree.totalBytes) }
-                    repository.uploadTree(host, tree, SftpPath.join(remoteDir, name), progress(transfer.id, handle))
+    fun submit(plan: UploadPlan, overwrite: Boolean) {
+        val skip = if (overwrite) emptySet() else plan.conflicts.toSet()
+        when (plan) {
+            // name 为 null 时 `null in Set<String>` 恒 false，正好就是「取不到名字的一律直传」
+            is UploadPlan.Files ->
+                plan.picked.filterNot { it.name in skip }.forEach { upload(plan.host, it.uri, plan.remoteDir) }
+
+            is UploadPlan.Folder -> {
+                val tree = plan.tree.without(skip)
+                val transfer = newTransfer(plan.host, TransferDirection.UPLOAD, plan.name, tree.totalBytes)
+                // 全跳过导致一个文件都不剩时照样入队：mkdirs 幂等、一秒就「完成」，
+                // 比什么都不发生更像「我的选择被执行了」。多文件那边没有这个壳，对话框消失就是全部反馈
+                enqueue(transfer, Handle(plan.streams)) { handle ->
+                    repository.uploadTree(plan.host, tree, plan.remoteRoot, progress(transfer.id, handle))
                 }
             }
         }
@@ -171,8 +192,7 @@ class TransferQueue(
         totalBytes = totalBytes,
     )
 
-    private fun enqueue(transfer: Transfer, body: suspend (Handle) -> Unit) {
-        val handle = Handle()
+    private fun enqueue(transfer: Transfer, handle: Handle = Handle(), body: suspend (Handle) -> Unit) {
         handles[transfer.id] = handle
         _transfers.update { it + transfer }
 

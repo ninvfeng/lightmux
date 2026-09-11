@@ -14,7 +14,9 @@ import net.schmizz.sshj.sftp.FileAttributes
 import net.schmizz.sshj.sftp.FileMode
 import net.schmizz.sshj.sftp.OpenMode
 import net.schmizz.sshj.sftp.RemoteFile
+import net.schmizz.sshj.sftp.Response
 import net.schmizz.sshj.sftp.SFTPClient
+import net.schmizz.sshj.sftp.SFTPException
 import net.schmizz.sshj.xfer.LocalDestFile
 import net.schmizz.sshj.xfer.LocalFileFilter
 import net.schmizz.sshj.xfer.LocalSourceFile
@@ -54,6 +56,9 @@ class LocalTree(
 
 /** 树里的一个文件。[path] 是相对树根的路径，可能带子目录（如 `css/app.css`）。 */
 class LocalTreeFile(val path: String, val source: LocalSource)
+
+/** 远端一个目录里有什么。[names] 是全部条目名（判重名用），[dirs] 是其中的真目录（决定还要不要往下探）。 */
+class DirNames(val names: Set<String>, val dirs: Set<String>)
 
 /** 用户取消了传输。从进度回调里抛出来打断 sshj 的复制循环，见 [SftpRepository.upload]。 */
 class TransferCancelledException : IOException("transfer cancelled")
@@ -106,6 +111,30 @@ class SftpRepository(private val sessions: SessionManager) {
 
     suspend fun list(host: Host, path: String): List<RemoteEntry> = onLane(host, Lane.BROWSE) { client ->
         client.ls(path).map { it.attributes.toEntry(SftpPath.normalize(it.path), it.name) }.sortedForDisplay()
+    }
+
+    /**
+     * 只取名字的列目录，上传前的同名预检用。
+     *
+     * 不复用 [list]：那边要排序、要建 [RemoteEntry]，而预检只关心「有没有这个名字」。
+     */
+    suspend fun listNames(host: Host, path: String): DirNames? = onLane(host, Lane.BROWSE) { client ->
+        val entries = try {
+            client.ls(path)
+        } catch (e: SFTPException) {
+            // 目录不存在是预检里最常见的正常结果，返回 null；其余失败（权限不足、连接断）必须原样抛。
+            // 把它们也当成「里面什么都没有」= 判定无冲突然后静默覆盖，那正是这次要消灭的东西。
+            if (e.statusCode == Response.StatusCode.NO_SUCH_FILE ||
+                e.statusCode == Response.StatusCode.NO_SUCH_PATH
+            ) {
+                return@onLane null
+            }
+            throw e
+        }
+        DirNames(
+            names = entries.mapTo(mutableSetOf()) { it.name },
+            dirs = entries.filter { it.isDirectory }.mapTo(mutableSetOf()) { it.name },
+        )
     }
 
     /**
@@ -218,8 +247,9 @@ class SftpRepository(private val sessions: SessionManager) {
      * **整棵树在一次 [onLane] 里跑完**，不逐文件抢锁——否则队列里排着的其他传输会插进
      * 文件之间，用户看到走走停停的进度条，服务端目录也会长时间停在半截。
      *
-     * 已存在的目录、同名文件都直接复用/覆盖（`mkdirs` 天然幂等，`upload` 本来就是
-     * `WRITE|CREAT|TRUNC`），等同 `scp -r` 的合并语义。
+     * 目录一律复用（`mkdirs` 天然幂等）。**同名文件覆盖还是跳过，这一层不决定**——
+     * 调用方（[TransferQueue.submit]）在预检问过用户之后，把要跳过的那些从 [tree] 里剔掉再交进来，
+     * 落到这里的每个文件都是「确定要写」的，照 `WRITE|CREAT|TRUNC` 直接盖。
      */
     suspend fun uploadTree(
         host: Host,

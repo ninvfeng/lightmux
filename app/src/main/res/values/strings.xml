@@ -229,6 +229,11 @@
     <string name="files_upload">Upload</string>
     <string name="files_upload_files">Upload files</string>
     <string name="files_upload_folder">Upload folder</string>
+    <string name="files_upload_checking">Checking the server…</string>
+    <string name="files_conflict_title">Files already exist</string>
+    <string name="files_conflict_more">and %1$d more</string>
+    <string name="files_conflict_overwrite">Overwrite all</string>
+    <string name="files_conflict_skip">Skip all</string>
     <string name="files_download">Download</string>
     <string name="files_edit">Edit as text</string>
     <string name="files_go_up">Parent folder</string>

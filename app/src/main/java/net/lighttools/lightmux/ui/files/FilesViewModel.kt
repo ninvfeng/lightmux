@@ -1,10 +1,13 @@
 package net.lighttools.lightmux.ui.files
 
+import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import net.lighttools.lightmux.data.Host
 import net.lighttools.lightmux.data.HostStore
@@ -12,6 +15,8 @@ import net.lighttools.lightmux.sftp.RemoteEntry
 import net.lighttools.lightmux.sftp.RemoteFileType
 import net.lighttools.lightmux.sftp.SftpPath
 import net.lighttools.lightmux.sftp.SftpRepository
+import net.lighttools.lightmux.sftp.TransferQueue
+import net.lighttools.lightmux.sftp.UploadPlan
 
 /**
  * 文件页状态。
@@ -39,6 +44,7 @@ data class FilesUiState(
 class FilesViewModel(
     private val repository: SftpRepository,
     private val hostStore: HostStore,
+    private val queue: TransferQueue,
     private val hostId: String,
     private val initialPath: String,
 ) : ViewModel() {
@@ -73,6 +79,71 @@ class FilesViewModel(
 
     /** 取走并清掉：选择器回调只会来一次，留着会让下一次取消的挑选误传上一条。 */
     fun consumePendingDownload(): RemoteEntry? = pendingDownload.also { pendingDownload = null }
+
+    /** 预检走到哪了。null = 没有正在进行的上传请求。 */
+    sealed interface UploadCheck {
+        data object Scanning : UploadCheck
+
+        data class Conflicts(val names: List<String>) : UploadCheck
+    }
+
+    /**
+     * 上传前的预检状态。**必须活在 ViewModel 里**（理由同 [pendingDownload]）：选择器是另一个
+     * Activity，它开着的时候本 Activity 随时可能被重建，页面 remember 到那时已经清空。
+     */
+    var uploadCheck by mutableStateOf<UploadCheck?>(null)
+        private set
+
+    private var pendingPlan: UploadPlan? = null
+
+    private var scanJob: Job? = null
+
+    fun requestUpload(uris: List<Uri>) = scan { host, dir -> queue.scanFiles(host, uris, dir) }
+
+    fun requestFolderUpload(treeUri: Uri) = scan { host, dir -> queue.scanFolder(host, treeUri, dir) }
+
+    private fun scan(build: suspend (Host, String) -> UploadPlan) {
+        val target = host ?: return
+        // 落点钉死在发起的这一刻：扫描一棵大树要几秒，拿事后的 state.path 去入队，
+        // 文件会落到用户不知道的目录里
+        val dir = state.path
+        scanJob?.cancel()
+        uploadCheck = UploadCheck.Scanning
+        scanJob = viewModelScope.launch {
+            val ready = try {
+                build(target, dir)
+            } catch (e: CancellationException) {
+                throw e                      // 取消不是错误，也不能被 runCatching 吞掉
+            } catch (e: Exception) {
+                uploadCheck = null
+                actionError = e.describe()   // 扫不清楚就不传，绝不退回「默认覆盖」
+                return@launch
+            }
+            if (ready.conflicts.isEmpty()) {        // 一个都不撞就别拿对话框拦人——这是最常见的情况
+                uploadCheck = null
+                queue.submit(ready, overwrite = true)
+            } else {
+                pendingPlan = ready
+                uploadCheck = UploadCheck.Conflicts(ready.conflicts)
+            }
+        }
+    }
+
+    /** 用户在冲突框里拍板。 */
+    fun resolveUpload(overwrite: Boolean) {
+        val ready = pendingPlan ?: return
+        pendingPlan = null
+        uploadCheck = null
+        queue.submit(ready, overwrite)
+    }
+
+    /** 扫描中按取消，或冲突框被返回键 / 点外部关掉：一个字节都不传。 */
+    fun cancelUpload() {
+        scanJob?.cancel()
+        scanJob = null
+        pendingPlan = null
+        uploadCheck = null
+    }
 
     /**
      * 祖先链，栈顶是当前目录的上一级。

@@ -88,6 +88,7 @@ import net.lighttools.lightmux.ui.common.ErrorBanner
 import net.lighttools.lightmux.ui.common.copyToClipboard
 import net.lighttools.lightmux.ui.common.InputDialog
 import net.lighttools.lightmux.ui.common.Spinner
+import net.lighttools.lightmux.ui.files.FilesViewModel.UploadCheck
 import net.lighttools.lightmux.ui.home.TreeRow
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -222,18 +223,17 @@ private fun FilesContent(
     // 浏览通道的关闭时机由 LightmuxRoot 统一判（进编辑器再回来时不该断了重连），这里只管拉数据
     LaunchedEffect(vm) { vm.start() }
 
-    // 多选：一次挑三个文件传上去是常态，让用户点三遍「上传」没道理
+    // 多选：一次挑三个文件传上去是常态，让用户点三遍「上传」没道理。
+    // 挑完不直接入队，先交给 vm 做同名预检（选择器的回调熬不过 Activity 重建，判断也得在 vm 里）
     val uploadPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenMultipleDocuments()
     ) { uris ->
-        val target = vm.host ?: return@rememberLauncherForActivityResult
-        uris.forEach { queue.upload(target, it, vm.state.path) }
+        if (uris.isNotEmpty()) vm.requestUpload(uris)
     }
     val uploadDirPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocumentTree()
     ) { uri ->
-        val target = vm.host
-        if (uri != null && target != null) queue.uploadTree(target, uri, vm.state.path)
+        if (uri != null) vm.requestFolderUpload(uri)
     }
     val downloadPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument(DOWNLOAD_MIME)
@@ -409,6 +409,18 @@ private fun FilesContent(
             },
             onDismiss = { pendingDelete = null },
         )
+    }
+
+    when (val check = vm.uploadCheck) {
+        UploadCheck.Scanning -> UploadScanningDialog(onCancel = vm::cancelUpload)
+        is UploadCheck.Conflicts -> UploadConflictDialog(
+            names = check.names,
+            onOverwrite = { vm.resolveUpload(overwrite = true) },
+            onSkip = { vm.resolveUpload(overwrite = false) },
+            onDismiss = vm::cancelUpload,
+        )
+
+        null -> Unit
     }
 }
 

@@ -221,6 +221,11 @@
     <string name="files_upload">上传</string>
     <string name="files_upload_files">上传文件</string>
     <string name="files_upload_folder">上传目录</string>
+    <string name="files_upload_checking">正在检查服务器…</string>
+    <string name="files_conflict_title">服务器上已有同名文件</string>
+    <string name="files_conflict_more">还有 %1$d 个</string>
+    <string name="files_conflict_overwrite">全部覆盖</string>
+    <string name="files_conflict_skip">全部跳过</string>
     <string name="files_download">下载</string>
     <string name="files_edit">文本编辑</string>
     <string name="files_go_up">上一级</string>

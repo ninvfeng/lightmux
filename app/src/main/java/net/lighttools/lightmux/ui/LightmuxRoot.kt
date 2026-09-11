@@ -294,7 +294,13 @@ fun LightmuxRoot() {
             is Screen.Files -> {
                 // 按 hostId 分键：换一台主机不该接着上一台的目录看
                 val vm = rememberVm("files:${screen.hostId}") {
-                    FilesViewModel(app.sftpRepository, app.hostStore, screen.hostId, screen.path)
+                    FilesViewModel(
+                        app.sftpRepository,
+                        app.hostStore,
+                        app.transferQueue,
+                        screen.hostId,
+                        screen.path,
+                    )
                 }
                 // 在子目录里，返回 = 回上一级；回到起点才让中央栈关掉页面（文件管理器的通用预期）
                 DisposableEffect(vm) {
@@ -392,7 +398,7 @@ fun LightmuxRoot() {
             // 和整页文件浏览共用同一个 VM（key 相同）：两边看的是同一台主机的同一次浏览，
             // 各存一份的话「刚才翻到哪」会分叉
             val vm = rememberVm("files:$hostId") {
-                FilesViewModel(app.sftpRepository, app.hostStore, hostId, "")
+                FilesViewModel(app.sftpRepository, app.hostStore, app.transferQueue, hostId, "")
             }
             FilesSheet(
                 vm = vm,
