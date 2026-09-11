@@ -31,6 +31,7 @@ import kotlinx.coroutines.launch
 import net.lighttools.lightmux.BuildConfig
 import net.lighttools.lightmux.LightmuxApp
 import net.lighttools.lightmux.sftp.SftpPath
+import net.lighttools.lightmux.ui.common.AuthChallengeDialog
 import net.lighttools.lightmux.ui.common.LocalSwipeOpenGuard
 import net.lighttools.lightmux.ui.common.SwipeSide
 import net.lighttools.lightmux.ui.common.longSwipe
@@ -460,6 +461,17 @@ fun LightmuxRoot() {
                     )
                 }
             }
+        }
+
+        // 挂在根上而不是终端页：追问可能来自文件页探测、转发健康检查、主机编辑页的测试连接，
+        // 挂在终端页的话用户一返回主页对话框就没了，而 Reader 线程还在原地等答案（见 AuthChallengeDialog）。
+        val pendingChallenges by app.authChallenges.pending.collectAsState()
+        pendingChallenges.firstOrNull()?.let { challenge ->
+            AuthChallengeDialog(
+                challenge = challenge,
+                onAnswer = { challenge.answer(it) },
+                onCancel = { challenge.cancel() },
+            )
         }
     }
 }

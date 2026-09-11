@@ -5,7 +5,18 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import net.lighttools.lightmux.data.Host
 import net.lighttools.lightmux.session.SessionManager
+import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
+
+/**
+ * 连的是一台已知需要验证码的主机，而这次拨号不是显式用户动作——拒绝，不弹 OTP 对话框。
+ *
+ * 见 [ExecPool] 的 MFA 硬闸门：[net.lighttools.lightmux.ui.monitor.MonitorViewModel] 的轮询
+ * 每 5 秒探测一次、失败不退避，真去拨的话就是验证码对话框每 5 秒弹一次——而
+ * `pam_google_authenticator` 默认拒绝复用刚用过的验证码，第二次尝试注定失败，循环打不破。
+ */
+class MfaHostConnectionRequiredException(hostId: String) :
+    IOException("Host $hostId requires interactive verification; connect explicitly first")
 
 /**
  * 侧通道用的连接池，**活在 Application 作用域**（挂在 `LightmuxApp` 上）。
@@ -28,6 +39,13 @@ class ExecPool(
      * 拿到手时可能已经失效，和复用前台终端那条连接是同一种风险。
      */
     private val borrowed: (hostId: String) -> SshConnection? = { null },
+    /**
+     * 这台主机是不是运行时已经确认过需要验证码——见 [connectionFor] 末尾的硬闸门。
+     *
+     * 用函数注入而不是直接持有 `AuthChallenges`：这个池子本来就不该知道验证码 UI 怎么问，
+     * 它只需要一个「能不能自己拨号」的判断。
+     */
+    private val isMfaHost: (hostId: String) -> Boolean = { false },
 ) {
 
     /**
@@ -97,6 +115,11 @@ class ExecPool(
         // 加第二个来源就会破，而破的表现是「拿到一条死连接、exec 直接抛」，
         // 且再也不会去拨新的（下面那段永远走不到）。
         borrowed(host.id)?.takeIf { it.isConnected }?.let { return it }
+
+        // 走到这里说明前三步全落空，真要新拨一条连接了——MFA 主机的硬闸门卡在这一步，
+        // 而不是卡在 withConnection 入口：主机第一次连接时还不知道它需要验证码（运行时才学得到，
+        // 见 AuthChallenges.isMfaHost），不能拦住它唯一一次学习的机会。
+        if (isMfaHost(host.id)) throw MfaHostConnectionRequiredException(host.id)
 
         val fresh = SshConnection(host)
         fresh.connectBlocking()

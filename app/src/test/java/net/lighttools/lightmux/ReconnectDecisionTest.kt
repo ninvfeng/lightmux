@@ -3,6 +3,7 @@ package net.lighttools.lightmux
 import com.hierynomus.sshj.common.KeyDecryptionFailedException
 import net.lighttools.lightmux.session.ReconnectDecision
 import net.lighttools.lightmux.session.reconnectLoginCommand
+import net.lighttools.lightmux.ssh.ChallengeCancelledException
 import net.lighttools.lightmux.ssh.CredentialLostException
 import net.lighttools.lightmux.ssh.HostKeyChangedException
 import net.lighttools.lightmux.ssh.ProxyJumpException
@@ -71,6 +72,11 @@ class ReconnectDecisionTest {
     @Test
     fun `凭据解不开是终态，退避多久也解不开`() {
         assertEquals(ReconnectDecision.GiveUp, ReconnectDecision.of(false, CredentialLostException("h1")))
+    }
+
+    @Test
+    fun `验证码追问被取消是终态，不能自动再弹一次同样的对话框`() {
+        assertEquals(ReconnectDecision.GiveUp, ReconnectDecision.of(false, ChallengeCancelledException()))
     }
 
     @Test

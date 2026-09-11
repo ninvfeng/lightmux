@@ -262,6 +262,8 @@ private fun ConnectionFailureBanner(
             )
         }
 
+        // 取消/超时不是「凭据错了」，重连就是再问一遍——文案已经说明白了（见 error_challenge_cancelled）
+        ConnectionFailure.ChallengeCancelled,
         ConnectionFailure.ExecTimeout,
         is ConnectionFailure.Other,
         -> ErrorBanner(

@@ -132,9 +132,13 @@
     <string name="error_proxy_jump_broken">The jump host is missing or the chain loops back on itself. Check this host\'s settings.</string>
     <string name="error_exec_timeout">The command timed out</string>
     <string name="error_credential_lost">The stored credential could not be decrypted. Enter it again.</string>
+    <string name="error_challenge_cancelled">Verification needed. Tap reconnect to continue.</string>
     <!-- 抽屉/终端页跳过来时，这台主机刚好被删了。监控页、文件页、编辑器共用 -->
     <string name="error_host_missing">This host has been deleted</string>
     <string name="edit_credentials">Edit credentials</string>
+
+    <!-- 服务端 keyboard-interactive 追问对话框，name 兜底文案（服务端可能没给这一项） -->
+    <string name="auth_challenge_title">Verification required</string>
 
     <!-- tmux 会话树 -->
     <plurals name="tmux_windows">

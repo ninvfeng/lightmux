@@ -127,9 +127,13 @@
     <string name="error_proxy_jump_broken">跳板机不存在或跳板链绕回了自己，检查一下这台主机的设置</string>
     <string name="error_exec_timeout">命令执行超时</string>
     <string name="error_credential_lost">保存的凭据无法解密，请重新输入</string>
+    <string name="error_challenge_cancelled">需要验证码，点重连继续</string>
     <!-- 抽屉/终端页跳过来时，这台主机刚好被删了。监控页、文件页、编辑器共用 -->
     <string name="error_host_missing">这台主机已被删除</string>
     <string name="edit_credentials">去改凭据</string>
+
+    <!-- 服务端 keyboard-interactive 追问对话框，name 兜底文案（服务端可能没给这一项） -->
+    <string name="auth_challenge_title">需要验证</string>
 
     <!-- tmux 会话树 -->
     <plurals name="tmux_windows">

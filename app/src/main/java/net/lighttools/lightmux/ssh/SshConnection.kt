@@ -19,7 +19,13 @@ import net.schmizz.sshj.connection.channel.direct.Session
 import net.schmizz.sshj.sftp.SFTPClient
 import net.schmizz.sshj.userauth.keyprovider.FileKeyProvider
 import net.schmizz.sshj.userauth.keyprovider.KeyProviderUtil
+import net.schmizz.sshj.userauth.method.AuthKeyboardInteractive
+import net.schmizz.sshj.userauth.method.AuthMethod as SshjAuthMethod
+import net.schmizz.sshj.userauth.method.AuthPassword
+import net.schmizz.sshj.userauth.method.AuthPublickey
+import net.schmizz.sshj.userauth.method.ChallengeResponseProvider
 import net.schmizz.sshj.userauth.password.PasswordUtils
+import net.schmizz.sshj.userauth.password.Resource
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import java.io.IOException
 import java.io.InputStream
@@ -102,6 +108,8 @@ class SshConnection(
      * 只在 [Host.proxyJumpId] 非空时才会被调用——绝大多数主机是直连的，不该为它们付任何代价。
      */
     private val allHosts: () -> List<Host> = { LightmuxApp.instance.hostsBlocking() },
+    /** 挂在 Application 上的单例（同 [KnownHosts] 的注入风格）——它持有一份进程级的前台闸门状态，不能每条连接各建一份。 */
+    private val authChallenges: AuthChallenges = LightmuxApp.instance.authChallenges,
 ) {
 
     /** 开 channel 的过程不是线程安全的（分配 channel id + 发包 + 等回应），必须串起来。 */
@@ -109,6 +117,10 @@ class SshConnection(
 
     @Volatile
     private var client: SSHClient? = null
+
+    /** 当前这一跳正在用的 kb-interactive 应答桥，[close] 靠它把挂着的追问唤醒。 */
+    @Volatile
+    private var responder: ChallengeResponder? = null
 
     /**
      * 跳板链上那几条连接，按连接顺序。
@@ -164,6 +176,14 @@ class SshConnection(
             main.connection.keepAlive.keepAliveInterval = KEEPALIVE_SECONDS
             jumpClients = opened.dropLast(1)
             client = main
+            if (closed.get()) {
+                // 建连期间被并发 close() 抢先跑完：那次 close() 在 `client` 还是 null 的那一刻
+                // 结束，什么也没关成。不补这一步，刚建好的这些 SSHClient 就是永远没人关的孤儿
+                // 连接——对端 `who` 里看得见，还占着 MaxSessions。清空字段、往下走到统一的清理逻辑。
+                client = null
+                jumpClients = emptyList()
+                throw IOException("SSH connection is not established")
+            }
         } catch (e: Throwable) {
             opened.asReversed().forEach { IOUtils.closeQuietly(it) }
             throw e
@@ -206,16 +226,139 @@ class SshConnection(
         authenticate(client, target)
     }
 
+    /**
+     * 零配置回退到 keyboard-interactive：不管主机配的是密码还是私钥，都在后面追加一个
+     * kb-interactive 尝试。多数主机服务端压根不提这个方法，这一步等于没做；开了 MFA 的主机
+     * 才会真正用上——不新增 `AuthMethod` 枚举项、不碰主机编辑页，配置照旧。
+     *
+     * 顺序 `[配置的方法, kb-interactive]` 对应的是 `publickey,keyboard-interactive` 这类两步
+     * 验证：sshj 在配置的方法拿到 partial success 后会自动往下试列表里的下一个，颠倒顺序会先问
+     * 验证码、再问私钥密码，体验不对也不符合服务端期望的顺序。
+     */
     private fun authenticate(client: SSHClient, target: Host) {
         if (target.auth.credentialLost) throw CredentialLostException(target.id)
-        when (val auth = target.auth) {
-            is AuthMethod.Password -> client.authPassword(target.username, auth.password)
-
-            is AuthMethod.PrivateKey -> client.authPublickey(target.username, keyProvider(auth))
-
+        val configured: SshjAuthMethod? = when (val auth = target.auth) {
+            is AuthMethod.Password -> AuthPassword(PasswordUtils.createOneOff(auth.password.toCharArray()))
+            is AuthMethod.PrivateKey -> AuthPublickey(keyProvider(auth))
             AuthMethod.Agent ->
                 throw UnsupportedOperationException("ssh-agent authentication is not supported yet")
         }
+
+        val newResponder = ChallengeResponder(client, target, authChallenges)
+        responder = newResponder
+        // connectBlocking() 顶部的 `check(!closed.get())` 通过之后、这一行跑之前，还有一条窗口：
+        // 另一条线程这时调 close() 见到的 responder 还是 null，abort() 无从谈起。这里补一次回查，
+        // 晚到的 close() 就靠这一步兜底，不会把一次真实的用户取消晾在一边。
+        if (closed.get()) {
+            newResponder.abort()
+            throw IOException("SSH connection is not established")
+        }
+
+        // kb-interactive 一问一答要等人看清提示、翻出验证器、敲完数字，几十秒很正常；sshj 默认的
+        // 握手级超时（十几秒）等不到这个时间。每一跳都临时抬高、用完立刻恢复到 finally 里——
+        // 跳板链场景不这样做的话，后面几跳会继承这次抬高后的超时，等价于把超时越滚越大。
+        val transport = client.transport
+        val originalTimeoutMs = transport.timeoutMs
+        transport.timeoutMs = AuthChallenges.CHALLENGE_TIMEOUT_MS.toInt()
+        try {
+            client.auth(target.username, listOfNotNull(configured, AuthKeyboardInteractive(newResponder)))
+        } catch (e: Exception) {
+            // SSHClient#auth 在所有方法都失败后，把最后一个方法的失败重新包成一句通用的
+            // "Exhausted available authentication methods"，真正的取消原因被压到 cause 里一层。
+            // 直接换回 responder 记的那个真实原因，ConnectionFailure/ReconnectDecision 才不用
+            // 越过这层通用包装去扒 cause 链才认得出「这是一次取消，不是一次认证失败」。
+            throw newResponder.cancellation ?: e
+        } finally {
+            transport.timeoutMs = originalTimeoutMs
+        }
+    }
+
+    /**
+     * kb-interactive（RFC 4256）的应答桥。sshj 的认证线程（每条 Transport 一条 Reader 线程）
+     * 同步调用这几个回调；我们把每一条追问转成 [AuthChallenge] 扔给 [AuthChallenges]，再阻塞
+     * 等 UI 给出答案——这条线程本来就是阻塞式协议状态机的一部分，多等一会儿不算引入新问题。
+     *
+     * [init] / [getResponse] / [shouldRetry] 全部由同一条 Reader 线程串行调用——一条 Transport
+     * 一条 Reader，每一跳有自己的 client + responder。`name` / `instruction` / `passwordUsed` /
+     * `retried` 不加 `@Volatile` 就是靠这个前提：破坏它是一个隐蔽的数据竞争，不会在测试里露头。
+     * [cancellation] 例外——[abort] 由 [close] 触发，调用线程可能是主线程，跨线程可见性必须靠
+     * `@Volatile`；「建挑战 + 记 current」和 [abort] 还要共享同一把 [lock]，`@Volatile` 只保证
+     * 可见性、不保证这两步之间不被 abort() 插队。
+     */
+    private class ChallengeResponder(
+        private val client: SSHClient,
+        private val target: Host,
+        private val authChallenges: AuthChallenges,
+    ) : ChallengeResponseProvider {
+
+        private var name: String = ""
+        private var instruction: String = ""
+
+        /** 只有第一条真正是密码提示的追问才允许自动填一次，见 [ChallengePrompt.shouldAutofill]。 */
+        private var passwordUsed = false
+
+        /** 只允许重试一次：配置的方法(1) + kb-interactive(1) + 重试(1) = 3 次，远低于 OpenSSH 默认 MaxAuthTries=6。 */
+        private var retried = false
+
+        private val lock = Any()
+
+        /** 正等着用户回答的那一问；[abort] 要靠它去唤醒挂着的线程。 */
+        private var current: AuthChallenge? = null
+
+        @Volatile
+        var cancellation: ChallengeCancelledException? = null
+            private set
+
+        override fun getSubmethods(): MutableList<String> = mutableListOf()
+
+        override fun init(resource: Resource<*>?, name: String?, instruction: String?) {
+            // 平台类型来的参数，一个意外的 null 就是 NPE——NPE 不是 UserAuthException，
+            // 会穿透 sshj 的异常表直接打死这条连接，不能让它有机会发生。
+            this.name = name.orEmpty()
+            this.instruction = instruction.orEmpty()
+        }
+
+        override fun getResponse(prompt: String?, echo: Boolean): CharArray {
+            val text = prompt.orEmpty()
+
+            val savedPassword = (target.auth as? AuthMethod.Password)?.password
+            if (savedPassword != null && ChallengePrompt.shouldAutofill(text, allowedMethods(), passwordUsed)) {
+                passwordUsed = true
+                return savedPassword.toCharArray()
+            }
+
+            val challenge = AuthChallenge(target.id, target.name, name, instruction, text, echo)
+            synchronized(lock) {
+                // abort() 可能在我们进这个方法之前就已经跑完了——那就不该再弹一条新问题出来。
+                cancellation?.let { throw it }
+                current = challenge
+            }
+            // ask() 是阻塞调用，绝不能在持锁的情况下进去：abort() 需要这把锁才能唤醒它。
+            try {
+                return authChallenges.ask(challenge).toCharArray()
+            } catch (e: ChallengeCancelledException) {
+                synchronized(lock) { cancellation = e }
+                throw e
+            }
+        }
+
+        override fun shouldRetry(): Boolean {
+            if (cancellation != null) return false
+            if (retried) return false
+            retried = true
+            return true
+        }
+
+        /** [close] 调用，可能来自主线程——绝不能做 IO，只翻标志位 + 唤醒挂着的挑战。幂等。 */
+        fun abort() {
+            synchronized(lock) {
+                if (cancellation == null) cancellation = ChallengeCancelledException()
+                current?.cancel()
+            }
+        }
+
+        private fun allowedMethods(): Collection<String> =
+            runCatching { client.userAuth.allowedMethods }.getOrDefault(emptyList())
     }
 
     /**
@@ -335,8 +478,13 @@ class SshConnection(
         // 先摘引用再关：`closed` / [isConnected] 必须立刻生效，真正的 socket 收尾可以慢一步。
         val main = client
         val jumps = jumpClients
+        val activeResponder = responder
         client = null
         jumpClients = emptyList()
+        // 关 socket 唤不醒一条正阻塞在挑战上的 Reader 线程——它在等的是 AuthChallenge 的应答队列，
+        // 不是这条 socket。abort() 只翻标志位、offer 一个取消哨兵，不做任何 IO，可以放在
+        // SshIo.quietly 之前直接调用（close() 常常就在主线程上跑）。
+        activeResponder?.abort()
         // 关连接要发 SSH_MSG_DISCONNECT，是一次真实的 socket 写，而调用方遍布主线程
         // （主页收起主机卡片、退出文件页、关会话），必须甩开——原因见 [SshIo]。
         // 跳板链倒着关：先关目标那一条，它占的 channel 才不会拖着上一跳。

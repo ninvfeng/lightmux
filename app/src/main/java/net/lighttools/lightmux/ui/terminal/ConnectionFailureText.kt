@@ -22,6 +22,7 @@ fun connectionFailureText(failure: ConnectionFailure, endpoint: String): String 
     ConnectionFailure.AuthFailed -> stringResource(R.string.error_auth_failed)
     ConnectionFailure.CredentialLost -> stringResource(R.string.error_credential_lost)
     ConnectionFailure.AgentUnsupported -> stringResource(R.string.error_auth_agent_unsupported)
+    ConnectionFailure.ChallengeCancelled -> stringResource(R.string.error_challenge_cancelled)
     ConnectionFailure.ExecTimeout -> stringResource(R.string.error_exec_timeout)
     is ConnectionFailure.ProxyJumpFailed -> failure.jumpName?.let { name ->
         stringResource(R.string.error_proxy_jump, name, connectionFailureText(failure.reason, endpoint))

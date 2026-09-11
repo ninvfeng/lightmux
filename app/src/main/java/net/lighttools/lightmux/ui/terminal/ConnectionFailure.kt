@@ -1,5 +1,6 @@
 package net.lighttools.lightmux.ui.terminal
 
+import net.lighttools.lightmux.ssh.ChallengeCancelledException
 import net.lighttools.lightmux.ssh.CredentialLostException
 import net.lighttools.lightmux.ssh.ExecTimeoutException
 import net.lighttools.lightmux.ssh.HostKeyChangedException
@@ -33,6 +34,9 @@ sealed interface ConnectionFailure {
     data object CredentialLost : ConnectionFailure
 
     data object AgentUnsupported : ConnectionFailure
+
+    /** 验证码/追问被取消了——用户主动点的，或者 app 不在前台时自动作废的，见 [ChallengeCancelledException]。 */
+    data object ChallengeCancelled : ConnectionFailure
 
     data object ExecTimeout : ConnectionFailure
 
@@ -76,6 +80,8 @@ sealed interface ConnectionFailure {
                     }
 
                     is CredentialLostException -> return CredentialLost
+                    // 必须排在通用 UserAuthException 分支前面：它本身就是 UserAuthException 的子类
+                    is ChallengeCancelledException -> return ChallengeCancelled
                     is UserAuthException -> return AuthFailed
                     is ExecTimeoutException -> return ExecTimeout
                     is UnsupportedOperationException -> return AgentUnsupported

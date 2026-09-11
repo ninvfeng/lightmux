@@ -22,6 +22,7 @@ import net.lighttools.lightmux.session.NetworkWatcher
 import net.lighttools.lightmux.session.SessionManager
 import net.lighttools.lightmux.sftp.SftpRepository
 import net.lighttools.lightmux.sftp.TransferQueue
+import net.lighttools.lightmux.ssh.AuthChallenges
 import net.lighttools.lightmux.ssh.ExecPool
 import net.lighttools.lightmux.tmux.TmuxCache
 import net.lighttools.lightmux.tmux.TmuxRepository
@@ -67,6 +68,13 @@ class LightmuxApp : Application() {
     val updateInstaller: UpdateInstaller by lazy { UpdateInstaller(this) }
 
     /**
+     * kb-interactive 追问中枢（验证码 / 二次口令）。挂在这里而不是每条 [net.lighttools.lightmux.ssh.SshConnection]
+     * 各建一份，理由同 [net.lighttools.lightmux.ssh.KnownHosts]：它持有一份进程级状态
+     * （前台闸门的 ActivityLifecycleCallbacks 计数、学到的 MFA 主机集合），多份实例互相看不见彼此的状态。
+     */
+    val authChallenges = AuthChallenges(this)
+
+    /**
      * 所有侧通道（tmux / 监控）共用的连接池。
      *
      * 只能有一个实例：两个池子会各拨一条连接到同一台主机，白白多一次握手认证，
@@ -76,7 +84,11 @@ class LightmuxApp : Application() {
      * 那条连接就在手边，让侧通道看得见它，快速切换抽屉才有机会显示真实的会话列表，
      * 而不是一份带时间戳的旧缓存。lambda 是惰性的，不会在这里提前把 [sftpRepository] 造出来。
      */
-    val execPool = ExecPool(sessionManager) { sftpRepository.liveConnection(it) }
+    val execPool = ExecPool(
+        sessionManager,
+        borrowed = { sftpRepository.liveConnection(it) },
+        isMfaHost = { authChallenges.isMfaHost(it) },
+    )
 
     /** tmux 侧通道。探测缓存不该跟着主页 ViewModel 走，所以挂在这里。 */
     val tmuxRepository: TmuxRepository by lazy { TmuxRepository(TmuxCache(this), execPool) }

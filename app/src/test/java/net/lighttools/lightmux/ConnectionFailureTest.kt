@@ -1,5 +1,6 @@
 package net.lighttools.lightmux
 
+import net.lighttools.lightmux.ssh.ChallengeCancelledException
 import net.lighttools.lightmux.ssh.CredentialLostException
 import net.lighttools.lightmux.ssh.HostKeyChangedException
 import net.lighttools.lightmux.ssh.ProxyJumpException
@@ -60,6 +61,32 @@ class ConnectionFailureTest {
         val failure = ConnectionFailure.of(e) as ConnectionFailure.ProxyJumpFailed
         assertNull(failure.jumpHostId)
         assertNull(failure.jumpName)
+    }
+
+    @Test
+    fun `验证码追问被取消要和普通认证失败分开显示`() {
+        assertEquals(ConnectionFailure.ChallengeCancelled, ConnectionFailure.of(ChallengeCancelledException()))
+    }
+
+    @Test
+    fun `验证码取消被传输层包了几层也认得出来，不会落回认证失败`() {
+        // SshConnection#authenticate 已经把 SSHClient#auth 那层通用的
+        // "Exhausted available authentication methods" 包装换回了真正的取消原因
+        // （见 responder.cancellation ?: e），所以这里到达 ConnectionFailure.of() 之前
+        // 剩下的只会是普通传输层的包装，不会是另一层 UserAuthException——
+        // 一旦外层本身先匹配到通用 UserAuthException 分支，分类就会在那一层直接返回，
+        // 不会继续往下扒到更具体的 ChallengeCancelledException。
+        val wrapped = IOException("transport failed", IOException("kex", ChallengeCancelledException()))
+        assertEquals(ConnectionFailure.ChallengeCancelled, ConnectionFailure.of(wrapped))
+    }
+
+    @Test
+    fun `跳板机上取消验证码要带出是哪一台`() {
+        val e = ProxyJumpException("h-bastion", "bastion", ChallengeCancelledException())
+        assertEquals(
+            ConnectionFailure.ProxyJumpFailed("h-bastion", "bastion", ConnectionFailure.ChallengeCancelled),
+            ConnectionFailure.of(e),
+        )
     }
 
     @Test

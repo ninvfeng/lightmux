@@ -46,6 +46,8 @@ enum class ReconnectDecision {
                     // 密钥变更可能是中间人，必须由用户点头才继续，不能自己偷偷重连上去
                     is HostKeyChangedException,
                     // 密码错、私钥解不开、格式不认识：换凭据之前重试多少次都是同一个结果
+                    // （含 ChallengeCancelledException——验证码追问被取消是它的子类，自动重连
+                    // 只会把同一个对话框再弹一次，用户没法用「等一等」摆脱它）
                     is UserAuthException,
                     is KeyDecryptionFailedException,
                     is UnsupportedKeyFormatException,
