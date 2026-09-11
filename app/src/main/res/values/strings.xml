@@ -227,6 +227,8 @@
     <string name="files_failed">Could not list this folder: %1$s</string>
     <string name="files_name">Name</string>
     <string name="files_upload">Upload</string>
+    <string name="files_upload_files">Upload files</string>
+    <string name="files_upload_folder">Upload folder</string>
     <string name="files_download">Download</string>
     <string name="files_edit">Edit as text</string>
     <string name="files_go_up">Parent folder</string>

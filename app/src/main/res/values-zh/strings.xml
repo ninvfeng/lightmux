@@ -219,6 +219,8 @@
     <string name="files_failed">列目录失败：%1$s</string>
     <string name="files_name">名称</string>
     <string name="files_upload">上传</string>
+    <string name="files_upload_files">上传文件</string>
+    <string name="files_upload_folder">上传目录</string>
     <string name="files_download">下载</string>
     <string name="files_edit">文本编辑</string>
     <string name="files_go_up">上一级</string>

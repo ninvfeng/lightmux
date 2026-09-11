@@ -104,6 +104,32 @@ class TransferQueue(
         }
     }
 
+    /**
+     * 上传一个 SAF 选中的目录：在 [remoteDir] 下建同名目录，递归上传其中的文件与子目录。
+     *
+     * 根目录名的查询放 [intake]（快，一次跨进程 query）；**真正的遍历放进 [enqueue] 的
+     * body（拿到 [lane] 之后）**，不放 intake——遍历要逐层跨进程 query，慢 provider 上
+     * 能到几十秒，压在入队闸门里就是点完整个界面先卡住（理由同 [intake] 的注释）。
+     *
+     * 遍历完成前 `totalBytes == 0`，`Transfer.ratio` 因此是 null，现有的不定长进度条
+     * 自动表现为「扫描中」；遍历完再把 totalBytes 补上，切成确定长度的进度条。
+     */
+    fun uploadTree(host: Host, treeUri: Uri, remoteDir: String) {
+        scope.launch(Dispatchers.Main.immediate) {
+            intake.withLock {
+                val name = withContext(Dispatchers.IO) {
+                    SafTree.rootName(resolver, treeUri) ?: fallbackName()
+                }
+                val transfer = newTransfer(host, TransferDirection.UPLOAD, name, totalBytes = 0)
+                enqueue(transfer) { handle ->
+                    val tree = SafTree.walk(resolver, treeUri) { stream -> handle.stream.set(stream) }
+                    update(transfer.id) { it.copy(totalBytes = tree.totalBytes) }
+                    repository.uploadTree(host, tree, SftpPath.join(remoteDir, name), progress(transfer.id, handle))
+                }
+            }
+        }
+    }
+
     /** 下载到用户在系统选择器里指定的位置。 */
     fun download(host: Host, entry: RemoteEntry, target: Uri) {
         val transfer = newTransfer(host, TransferDirection.DOWNLOAD, entry.name, entry.sizeBytes)

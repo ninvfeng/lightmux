@@ -130,6 +130,19 @@ class SftpPathTest {
         assertEquals("/home/u/新建 文件.txt", SftpPath.join("/home/u", "新建 文件.txt"))
     }
 
+    @Test
+    fun `join 支持多级相对路径`() {
+        // SafTree 遍历产出的文件路径带子目录（如 css/app.css），join 要一次性吃下整段
+        assertEquals("/srv/www/css/app.css", SftpPath.join("/srv/www", "css/app.css"))
+    }
+
+    @Test
+    fun `join 不拦路径逃逸——isValidName 是唯一防线`() {
+        // 记录现状：join 本身不做逃逸检查，靠调用方对遍历出的每一段名字先过 isValidName
+        // （SafTree 正是这么做的）。这条丢了就是路径穿越——以后有人想删 isValidName 会红。
+        assertEquals("/etc/passwd", SftpPath.join("/srv/www", "../../etc/passwd"))
+    }
+
     // ---- parent ---------------------------------------------------------------
 
     @Test

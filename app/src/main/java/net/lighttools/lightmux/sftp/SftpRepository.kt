@@ -40,6 +40,21 @@ fun interface LocalSink {
     fun open(): OutputStream
 }
 
+/**
+ * 一整棵本地目录树，[SafTree.walk] 的产出。
+ *
+ * 目录与文件分两张表——SFTP 没有「写文件时自动建父目录」这回事，
+ * 目录必须按 [directories] 的顺序（父在前）先逐个 `mkdirs`。
+ */
+class LocalTree(
+    val directories: List<String>,
+    val files: List<LocalTreeFile>,
+    val totalBytes: Long,
+)
+
+/** 树里的一个文件。[path] 是相对树根的路径，可能带子目录（如 `css/app.css`）。 */
+class LocalTreeFile(val path: String, val source: LocalSource)
+
 /** 用户取消了传输。从进度回调里抛出来打断 sshj 的复制循环，见 [SftpRepository.upload]。 */
 class TransferCancelledException : IOException("transfer cancelled")
 
@@ -195,6 +210,59 @@ class SftpRepository(private val sessions: SessionManager) {
         transfer.preserveAttributes = false
         transfer.transferListener = ProgressListener(onProgress)
         transfer.download(remotePath, DestAdapter(sink))
+    }
+
+    /**
+     * 上传整棵目录树到 [remoteRoot]（这就是要建的那个同名目录，不是它的父目录）。
+     *
+     * **整棵树在一次 [onLane] 里跑完**，不逐文件抢锁——否则队列里排着的其他传输会插进
+     * 文件之间，用户看到走走停停的进度条，服务端目录也会长时间停在半截。
+     *
+     * 已存在的目录、同名文件都直接复用/覆盖（`mkdirs` 天然幂等，`upload` 本来就是
+     * `WRITE|CREAT|TRUNC`），等同 `scp -r` 的合并语义。
+     */
+    suspend fun uploadTree(
+        host: Host,
+        tree: LocalTree,
+        remoteRoot: String,
+        onProgress: (Long) -> Unit,
+    ) = onLane(host, Lane.TRANSFER) { client ->
+        at(remoteRoot) { client.mkdirs(remoteRoot) }
+        tree.directories.forEach { relative ->
+            val path = SftpPath.join(remoteRoot, relative)
+            at(path) { client.mkdirs(path) }
+        }
+
+        val progress = TreeProgress()
+        val transfer = client.fileTransfer
+        transfer.preserveAttributes = false
+        transfer.transferListener = TreeProgressListener(progress, onProgress)
+        tree.files.forEach { file ->
+            val remotePath = SftpPath.join(remoteRoot, file.path)
+            // 先报一次累计值再开传：sshj 只在「正在写」时回调，文件之间的空档没人认领取消，
+            // 全是小文件的树几乎全是这种空档；progress() 的取消检查在节流之前，不会被吃掉。
+            onProgress(progress.transferred)
+            at(remotePath) { transfer.upload(SourceAdapter(file.source), remotePath) }
+            progress.nextFile()
+        }
+        onProgress(progress.transferred)
+    }
+
+    /**
+     * 给出错的相对路径。一棵树几百项，光一句 `Permission denied` 不知道是哪个文件。
+     *
+     * **必须先认领 [TransferCancelledException]**：它是 `IOException` 子类，
+     * 不先放行就会被包成一条 `a/b.txt: transfer cancelled` 的 FAILED，
+     * 而那本来是用户自己按的取消。
+     */
+    private inline fun at(path: String, block: () -> Unit) {
+        try {
+            block()
+        } catch (e: TransferCancelledException) {
+            throw e
+        } catch (e: IOException) {
+            throw IOException("$path: ${e.message ?: e.javaClass.simpleName}", e)
+        }
     }
 
     // ---- 连接与通道 ------------------------------------------------------------
@@ -360,7 +428,52 @@ private class ProgressListener(private val onProgress: (Long) -> Unit) : Transfe
         StreamCopier.Listener { transferred -> onProgress(transferred) }
 }
 
-/** [LocalSource] → sshj。只支持单个文件，目录上传不在 V1 范围。 */
+/**
+ * 整棵树上传时的累计进度。**internal** 而非 private——单测要验证它（见 `TreeProgressTest`），
+ * 参照 `KeyedMutexTest` 测 `internal class KeyedMutex` 的先例。
+ *
+ * sshj 的 [StreamCopier.Listener] 回调给的是**当前文件**已传字节，每个文件从 0 重算，
+ * 所以要靠这里的 [settled] 把「已经翻篇的文件」攒住，[current] 只装正在传的那个。
+ * **按实际传过的字节数结账**，不是文件声称的长度——SAF 的 SIZE 可能是 0 或过期值。
+ */
+internal class TreeProgress {
+    private var settled = 0L
+    private var current = 0L
+
+    /** 累计已传字节，文件之间的空档也能读到——没有回调不代表进度条该停摆。 */
+    val transferred: Long get() = settled + current
+
+    /** 收到当前文件的一次回调，[bytes] 是该文件的累计值（不是增量）。 */
+    fun advance(bytes: Long): Long {
+        current = bytes
+        return transferred
+    }
+
+    /**
+     * 结掉当前文件，并进 [settled]。
+     *
+     * 空文件在 sshj 里一次回调都不会有（`StreamCopier` 读到 -1 直接跳出），
+     * 靠每上传完一个文件（不论空不空）都调一次这个来结账，两次连调也无害。
+     */
+    fun nextFile() {
+        settled += current
+        current = 0L
+    }
+}
+
+/** [TreeProgress] 与 sshj 回调之间的胶水，十行搞定。 */
+private class TreeProgressListener(
+    private val progress: TreeProgress,
+    private val onProgress: (Long) -> Unit,
+) : TransferListener {
+
+    override fun directory(name: String): TransferListener = this
+
+    override fun file(name: String, size: Long): StreamCopier.Listener =
+        StreamCopier.Listener { transferred -> onProgress(progress.advance(transferred)) }
+}
+
+/** [LocalSource] → sshj。只管单个文件；目录树上传见 [SftpRepository.uploadTree]，逐文件复用这个适配器。 */
 private class SourceAdapter(private val source: LocalSource) : LocalSourceFile {
 
     override fun getName(): String = source.name

@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.DriveFolderUpload
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Folder
@@ -35,6 +36,7 @@ import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Upload
+import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.DropdownMenu
@@ -227,6 +229,12 @@ private fun FilesContent(
         val target = vm.host ?: return@rememberLauncherForActivityResult
         uris.forEach { queue.upload(target, it, vm.state.path) }
     }
+    val uploadDirPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        val target = vm.host
+        if (uri != null && target != null) queue.uploadTree(target, uri, vm.state.path)
+    }
     val downloadPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument(DOWNLOAD_MIME)
     ) { uri ->
@@ -257,9 +265,11 @@ private fun FilesContent(
                     contentDescription = stringResource(R.string.files_show_hidden),
                 )
             }
-            IconButton(onClick = { uploadPicker.launch(arrayOf(UPLOAD_MIME)) }, enabled = host != null) {
-                Icon(Icons.Default.Upload, stringResource(R.string.files_upload))
-            }
+            UploadMenu(
+                enabled = host != null,
+                onUploadFiles = { uploadPicker.launch(arrayOf(UPLOAD_MIME)) },
+                onUploadFolder = { uploadDirPicker.launch(null) },
+            )
             CreateMenu(
                 enabled = host != null,
                 onNewFolder = { creatingFolder = true },
@@ -596,6 +606,44 @@ private fun EntryRow(
                 onClick = {
                     menuOpen = false
                     onDelete()
+                },
+            )
+        }
+    }
+}
+
+/**
+ * 顶栏的「上传」：一个图标带出文件 / 目录两项，结构照抄 [CreateMenu]。
+ *
+ * 选目录走 `OpenDocumentTree`，在当前目录下建同名目录再递归传——和选文件是两种系统选择器，
+ * 没法合并成一次 launch，只能靠菜单先问用户要哪种。
+ */
+@Composable
+private fun UploadMenu(
+    enabled: Boolean,
+    onUploadFiles: () -> Unit,
+    onUploadFolder: () -> Unit,
+) {
+    var menuOpen by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { menuOpen = true }, enabled = enabled) {
+            Icon(Icons.Default.Upload, stringResource(R.string.files_upload))
+        }
+        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            DropdownMenuItem(
+                leadingIcon = { Icon(Icons.Default.UploadFile, contentDescription = null) },
+                text = { Text(stringResource(R.string.files_upload_files)) },
+                onClick = {
+                    menuOpen = false
+                    onUploadFiles()
+                },
+            )
+            DropdownMenuItem(
+                leadingIcon = { Icon(Icons.Default.DriveFolderUpload, contentDescription = null) },
+                text = { Text(stringResource(R.string.files_upload_folder)) },
+                onClick = {
+                    menuOpen = false
+                    onUploadFolder()
                 },
             )
         }
