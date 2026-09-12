@@ -136,6 +136,41 @@ class HostFactsTest {
         return (result as FactsResult.Malformed).reason
     }
 
+    /** [HostFacts.QUICK_COMMAND] 的输出没有两次采样、GPU、容器那几段，单独起一份构造小工具。 */
+    private fun quickOutput(
+        procfs: String? = "1",
+        uptime1: String? = "1000.00 4000.00",
+        load: String? = "0.52 0.31 0.20 1/234 5678",
+        mem: String? = meminfo,
+        disk: String? = null,
+        addr: String? = null,
+        system: String? = this.system,
+        ps: String? = null,
+        end: Boolean = true,
+    ): String = buildString {
+        procfs?.let { append("${HostFacts.MARKER_PROCFS}$it\n") }
+        section(HostFacts.MARKER_UPTIME1, uptime1)
+        section(HostFacts.MARKER_LOAD, load)
+        section(HostFacts.MARKER_MEM, mem)
+        section(HostFacts.MARKER_DISK, disk)
+        section(HostFacts.MARKER_ADDR, addr)
+        section(HostFacts.MARKER_SYSTEM, system)
+        section(HostFacts.MARKER_PS, ps)
+        if (end) append("${HostFacts.MARKER_END}\n")
+    }
+
+    private fun quickSnapshotOf(stdout: String): HostSnapshot {
+        val result = HostFacts.parseQuick(stdout)
+        assertTrue("expected Ok but was $result", result is FactsResult.Ok)
+        return (result as FactsResult.Ok).snapshot
+    }
+
+    private fun quickReasonOf(stdout: String): String {
+        val result = HostFacts.parseQuick(stdout)
+        assertTrue("expected Malformed but was $result", result is FactsResult.Malformed)
+        return (result as FactsResult.Malformed).reason
+    }
+
     // ---- 采集命令 -------------------------------------------------------------
 
     @Test
@@ -171,19 +206,19 @@ class HostFactsTest {
     @Test
     fun `CPU 使用率来自两次采样的差值`() {
         // 总时间 +1000，其中 idle +800 → 20%
-        assertEquals(0.2, snapshotOf(output()).cpu.total, 1e-9)
+        assertEquals(0.2, snapshotOf(output()).cpu!!.total, 1e-9)
     }
 
     @Test
     fun `两次采样完全相同时使用率是 0 而不是 NaN`() {
         val snapshot = snapshotOf(output(cpu1 = stat1, cpu2 = stat1))
-        assertEquals(0.0, snapshot.cpu.total, 1e-9)
-        assertTrue(snapshot.cpu.cores.all { it == 0.0 })
+        assertEquals(0.0, snapshot.cpu!!.total, 1e-9)
+        assertTrue(snapshot.cpu!!.cores.all { it == 0.0 })
     }
 
     @Test
     fun `每核使用率各算各的`() {
-        val cores = snapshotOf(output()).cpu.cores
+        val cores = snapshotOf(output()).cpu!!.cores
         assertEquals(2, cores.size)
         assertEquals(0.2, cores[0], 1e-9)
         assertEquals(0.4, cores[1], 1e-9)
@@ -194,7 +229,7 @@ class HostFactsTest {
         val single = "cpu  100 0 100 800 0 0 0 0\ncpu0 100 0 100 800 0 0 0 0"
         val singleAfter = "cpu  200 0 200 1600 0 0 0 0\ncpu0 200 0 200 1600 0 0 0 0"
         val snapshot = snapshotOf(output(cpu1 = single, cpu2 = singleAfter))
-        assertEquals(1, snapshot.cpu.coreCount)
+        assertEquals(1, snapshot.cpu!!.coreCount)
     }
 
     @Test
@@ -204,7 +239,7 @@ class HostFactsTest {
             repeat(8) { append("cpu$it ${10 * scale} 0 ${10 * scale} ${100 * scale} 0 0 0 0\n") }
         }
         val snapshot = snapshotOf(output(cpu1 = stat(1), cpu2 = stat(2)))
-        assertEquals(8, snapshot.cpu.coreCount)
+        assertEquals(8, snapshot.cpu!!.coreCount)
     }
 
     @Test
@@ -212,21 +247,21 @@ class HostFactsTest {
         // guest / guest_nice 已经含在 user / nice 里，全加一遍会把使用率算低
         val before = "cpu  100 0 100 800 0 0 0 0 0 0"
         val after = "cpu  200 0 200 1600 0 0 0 0 500 500"
-        assertEquals(0.2, snapshotOf(output(cpu1 = before, cpu2 = after)).cpu.total, 1e-9)
+        assertEquals(0.2, snapshotOf(output(cpu1 = before, cpu2 = after)).cpu!!.total, 1e-9)
     }
 
     @Test
     fun `iowait 算作空闲`() {
         val before = "cpu  100 0 100 400 400 0 0 0"
         val after = "cpu  200 0 200 800 800 0 0 0"
-        assertEquals(0.2, snapshotOf(output(cpu1 = before, cpu2 = after)).cpu.total, 1e-9)
+        assertEquals(0.2, snapshotOf(output(cpu1 = before, cpu2 = after)).cpu!!.total, 1e-9)
     }
 
     @Test
     fun `第二次采样比第一次小时使用率取 0 而不是负数`() {
         // 容器重建、计数器重置都会出现这种输出
         val snapshot = snapshotOf(output(cpu1 = stat2, cpu2 = stat1))
-        assertEquals(0.0, snapshot.cpu.total, 1e-9)
+        assertEquals(0.0, snapshot.cpu!!.total, 1e-9)
     }
 
     // ---- 内存 ----------------------------------------------------------------
@@ -426,7 +461,7 @@ class HostFactsTest {
     fun `地址段缺失只是没有 IP，不影响整次采集`() {
         val snapshot = snapshotOf(output(addr = null))
         assertTrue(snapshot.addresses.isEmpty())
-        assertEquals(0.2, snapshot.cpu.total, 1e-9)
+        assertEquals(0.2, snapshot.cpu!!.total, 1e-9)
     }
 
     @Test
@@ -486,7 +521,7 @@ class HostFactsTest {
         // busybox 不认 -eo，那一段就是空的——不能因此判定整次采集失败
         val snapshot = snapshotOf(output(ps = ""))
         assertTrue(snapshot.processes.isEmpty())
-        assertEquals(0.2, snapshot.cpu.total, 1e-9)
+        assertEquals(0.2, snapshot.cpu!!.total, 1e-9)
     }
 
     @Test
@@ -593,7 +628,7 @@ class HostFactsTest {
     fun `没有 GPU 的机器整次采集仍然成功`() {
         val snapshot = snapshotOf(output(gpu = ""))
         assertTrue(snapshot.gpus.isEmpty())
-        assertEquals(0.2, snapshot.cpu.total, 1e-9)
+        assertEquals(0.2, snapshot.cpu!!.total, 1e-9)
     }
 
     @Test
@@ -664,7 +699,7 @@ class HostFactsTest {
         // 两种情况在这里长得一样：命令 not found 与 permission denied 的 stderr 都被丢弃了
         val snapshot = snapshotOf(output(docker = ""))
         assertTrue(snapshot.containers.isEmpty())
-        assertEquals(0.2, snapshot.cpu.total, 1e-9)
+        assertEquals(0.2, snapshot.cpu!!.total, 1e-9)
     }
 
     // ---- 容器资源占用 ---------------------------------------------------------
@@ -831,13 +866,67 @@ class HostFactsTest {
     @Test
     fun `远端 shell 的 motd 噪音不影响解析`() {
         val snapshot = snapshotOf(output(prefix = "Welcome to Ubuntu\nLast login: Mon\n"))
-        assertEquals(0.2, snapshot.cpu.total, 1e-9)
+        assertEquals(0.2, snapshot.cpu!!.total, 1e-9)
     }
 
     @Test
     fun `行尾的回车不影响解析`() {
         val crlf = output().replace("\n", "\r\n")
-        assertEquals(0.2, snapshotOf(crlf).cpu.total, 1e-9)
+        assertEquals(0.2, snapshotOf(crlf).cpu!!.total, 1e-9)
+    }
+
+    // ---- 快采 QUICK_COMMAND / parseQuick ---------------------------------------
+
+    @Test
+    fun `快采命令不含 sleep、第二次采样、GPU 与容器`() {
+        val cmd = HostFacts.QUICK_COMMAND
+        assertTrue(!cmd.contains("sleep 1"))
+        assertTrue(!cmd.contains(HostFacts.MARKER_CPU1))
+        assertTrue(!cmd.contains(HostFacts.MARKER_CPU2))
+        assertTrue(!cmd.contains(HostFacts.MARKER_NET1))
+        assertTrue(!cmd.contains(HostFacts.MARKER_NET2))
+        assertTrue(!cmd.contains(HostFacts.MARKER_UPTIME2))
+        assertTrue(!cmd.contains("nvidia-smi"))
+        listOf("docker", "podman").forEach { assertTrue("快采命令不该碰容器引擎 $it", !cmd.contains(it)) }
+    }
+
+    @Test
+    fun `快采命令覆盖负载、内存、磁盘、地址、系统信息与进程`() {
+        val cmd = HostFacts.QUICK_COMMAND
+        assertTrue(cmd.contains("cat /proc/loadavg"))
+        assertTrue(cmd.contains("cat /proc/meminfo"))
+        assertTrue(cmd.contains("df -P -k"))
+        assertTrue(cmd.contains(HostFacts.MARKER_ADDR))
+        assertTrue(cmd.contains(HostFacts.MARKER_SYSTEM))
+        assertTrue(cmd.contains("ps -eo pid,pcpu,pmem,comm"))
+    }
+
+    @Test
+    fun `快采成功时内存、磁盘、进程、负载正常解析，cpu 恒为 null`() {
+        val ps = "1234 12.3 4.5 java\n5678 1.0 2.0 sshd"
+        val disk = "/dev/sda1 10485760 5242880 5242880 50% /"
+        val snapshot = quickSnapshotOf(quickOutput(disk = disk, addr = "192.168.3.101 ", ps = ps))
+        assertNull(snapshot.cpu)
+        assertEquals(0.52, snapshot.load.one, 1e-9)
+        assertEquals(16_316_936L * 1024, snapshot.memory.totalBytes)
+        assertEquals(1, snapshot.disks.size)
+        assertEquals(2, snapshot.processes.size)
+        assertEquals(listOf("192.168.3.101"), snapshot.addresses)
+    }
+
+    @Test
+    fun `快采也判没有 proc stat 的主机为 Unsupported`() {
+        assertEquals(FactsResult.Unsupported, HostFacts.parseQuick(quickOutput(procfs = "0")))
+    }
+
+    @Test
+    fun `快采缺少 meminfo 段判定畸形`() {
+        assertTrue(quickReasonOf(quickOutput(mem = null)).contains("meminfo"))
+    }
+
+    @Test
+    fun `全量采集成功时 cpu 恒不为 null`() {
+        assertNotNull(snapshotOf(output()).cpu)
     }
 
     // ---- 其余读数 -------------------------------------------------------------

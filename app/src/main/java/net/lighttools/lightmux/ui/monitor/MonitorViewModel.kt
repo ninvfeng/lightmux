@@ -149,6 +149,22 @@ class MonitorViewModel(
         }
 
         state = state.copy(loading = true)
+
+        // 首屏快采：只在还没有任何快照时发——一旦页面上已经有数据在显示，
+        // 每 5 秒的稳态轮询没必要多打一条命令，那时全量命令本身就够快看到结果。
+        if (state.snapshot == null) {
+            when (val quick = runCatching { repository.probeQuick(target) }.getOrNull()) {
+                is FactsResult.Ok -> state = state.copy(snapshot = quick.snapshot, error = null)
+                // 这台机器连快采都判不支持，全量命令跑出来的结论只会一样，不必再等一次
+                FactsResult.Unsupported -> {
+                    state = MonitorUiState(unsupported = true)
+                    return
+                }
+                // 快采失败就当没发生过：全量命令马上就来，一条转瞬即逝的错误横幅只会让人以为出了事
+                else -> Unit
+            }
+        }
+
         val outcome = runCatching { repository.probe(target) }
         state = outcome.fold(
             onSuccess = { result ->

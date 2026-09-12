@@ -7,12 +7,17 @@ import java.util.Locale
  *
  * 可选项一律用 `null` / 空列表表示「这台机器上采不到」，**绝不拿 0 充数**（PRD §4.4）：
  * 一条 0% 的进度条和一条「不可用」在用户眼里是两回事，前者会被当成真实读数。
+ *
+ * [cpu] 例外：它的 `null` 不代表「采不到」，而是「首屏快采（[HostFacts.parseQuick]）
+ * 还没轮到全量采集」——CPU 使用率必须靠两次 `/proc/stat` 采样的差值，快采只发一次
+ * 就拿不到这个数。全量 [HostFacts.parse] 成功时 `cpu` 恒不为 null；读不出 `/proc/stat`
+ * 时整次采集判 [FactsResult.Malformed]，同样不会产出 `cpu = null` 的快照。
  */
 data class HostSnapshot(
     val system: SystemInfo,
     val uptimeSeconds: Long,
     val load: LoadAverage,
-    val cpu: CpuUsage,
+    val cpu: CpuUsage?,
     val memory: MemoryUsage,
     /** 没配 swap 的机器为 null。显示一条 0/0 的条只会让人以为读错了 */
     val swap: MemoryUsage? = null,

@@ -1,5 +1,12 @@
 package net.lighttools.lightmux.ui.monitor
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,10 +41,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -62,7 +71,6 @@ import net.lighttools.lightmux.monitor.formatPercent
 import net.lighttools.lightmux.monitor.formatRate
 import net.lighttools.lightmux.ui.common.BackButton
 import net.lighttools.lightmux.ui.common.ErrorBanner
-import net.lighttools.lightmux.ui.common.Spinner
 import net.lighttools.lightmux.ui.common.copyToClipboard
 
 /**
@@ -169,11 +177,14 @@ private fun MonitorBody(vm: MonitorViewModel, modifier: Modifier = Modifier) {
                 )
             }
 
-            // 首次进入只有 loading；之后失败时保留上一次的数据继续显示
-            state.snapshot == null -> if (state.loading) Centered { Spinner() }
+            // 首次进入摆骨架屏，等快采/全量陆续填上；已经报错过（重试也未必成功）
+            // 就只留上面那条横幅，永远填不上的灰条比一句错误更像坏了
+            state.snapshot == null -> if (state.error == null && !state.hostMissing) MetricsSkeleton()
 
             else -> Metrics(
                 snapshot = state.snapshot,
+                // CPU 段等的是差值，必须靠全量命令；还没报错就说明它正在路上
+                cpuPending = state.error == null,
                 publicIp = vm.publicIp,
                 coresExpanded = vm.coresExpanded,
                 onToggleCores = vm::toggleCores,
@@ -189,6 +200,77 @@ private fun MonitorBody(vm: MonitorViewModel, modifier: Modifier = Modifier) {
 }
 
 /**
+ * 首屏骨架：只摆「几乎所有机器都有」的三段（系统 / CPU / 内存）。磁盘、网络、容器、GPU
+ * 能不能采到因机器而异，猜画出来再消失反而更像坏了——等快采或全量数据回来（或者确认
+ * 采不到）再由 [Metrics] 决定要不要渲染那些段。
+ */
+@Composable
+private fun MetricsSkeleton() {
+    val alpha = rememberSkeletonAlpha()
+    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        Section(stringResource(R.string.monitor_system)) {
+            repeat(SKELETON_SYSTEM_ROWS) { SkeletonInfoRow(alpha) }
+        }
+        Section(stringResource(R.string.monitor_cpu)) { SkeletonMeter(alpha) }
+        Section(stringResource(R.string.monitor_memory)) { SkeletonMeter(alpha) }
+    }
+}
+
+/**
+ * 骨架屏的脉动灰条驱动值。
+ *
+ * `alpha()` 只在 [SkeletonBar] 的 [Canvas] draw lambda 里读——理由同 `Spinner.kt` 顶部那条注释：
+ * 提到这行以上（比如在 Composable 主体里 `val a = alpha()`）就是每帧重组一次，而不是每帧重绘。
+ */
+@Composable
+private fun rememberSkeletonAlpha(): () -> Float {
+    val transition = rememberInfiniteTransition()
+    val alpha = transition.animateFloat(
+        initialValue = SKELETON_ALPHA_MIN,
+        targetValue = SKELETON_ALPHA_MAX,
+        animationSpec = infiniteRepeatable(
+            animation = tween(SKELETON_PULSE_MILLIS, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+    )
+    return { alpha.value }
+}
+
+/** 一条圆角灰条，宽度按 [widthFraction] 收窄——模拟不同长度的文字或进度条占位。 */
+@Composable
+private fun SkeletonBar(widthFraction: Float = 1f, height: Dp = 14.dp, alpha: () -> Float) {
+    val color = MaterialTheme.colorScheme.onSurfaceVariant
+    Canvas(modifier = Modifier.fillMaxWidth(widthFraction).height(height)) {
+        drawRoundRect(color = color.copy(alpha = alpha()), cornerRadius = CornerRadius(size.height / 2f))
+    }
+}
+
+/** 骨架屏版 [InfoRow]：标签、值各一条占位。 */
+@Composable
+private fun SkeletonInfoRow(alpha: () -> Float) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SkeletonBar(widthFraction = 0.28f, alpha = alpha)
+        SkeletonBar(widthFraction = 0.4f, alpha = alpha)
+    }
+}
+
+/** 骨架屏版 [Meter]：标题 + 读数两条占位，下面接一条更粗的进度条占位。 */
+@Composable
+private fun SkeletonMeter(alpha: () -> Float) {
+    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            SkeletonBar(widthFraction = 0.32f, alpha = alpha)
+            SkeletonBar(widthFraction = 0.16f, height = 12.dp, alpha = alpha)
+        }
+        SkeletonBar(height = 6.dp, alpha = alpha)
+    }
+}
+
+/**
  * 全部指标。
  *
  * 用 `Column + verticalScroll` 而不是 `LazyColumn`：卡片一共就固定八段（系统 / CPU / 内存 /
@@ -199,6 +281,7 @@ private fun MonitorBody(vm: MonitorViewModel, modifier: Modifier = Modifier) {
 @Composable
 private fun Metrics(
     snapshot: HostSnapshot,
+    cpuPending: Boolean,
     publicIp: String?,
     coresExpanded: Boolean,
     onToggleCores: () -> Unit,
@@ -214,7 +297,7 @@ private fun Metrics(
             SystemRows(snapshot.system, snapshot.uptimeSeconds)
         }
         Section(stringResource(R.string.monitor_cpu)) {
-            CpuRows(snapshot.cpu, snapshot.load.formatted(), coresExpanded, onToggleCores)
+            CpuRows(snapshot.cpu, cpuPending, snapshot.load.formatted(), coresExpanded, onToggleCores)
         }
         // 没有独立显卡、或驱动工具不在 PATH 里，整段不显示——同容器、进程
         if (snapshot.gpus.isNotEmpty()) {
@@ -275,43 +358,58 @@ private fun SystemRows(system: SystemInfo, uptimeSeconds: Long) {
 /**
  * 每核占用默认收起：几十核的机器一进页面就是一屏进度条，把内存、磁盘全推到屏幕外。
  * 展开的开关挂在总览那条 Meter 上，不另占一行。
+ *
+ * @param cpu null 有两种含义，靠 [cpuPending] 分辨：全量命令还没回来（画骨架条），
+ *   或者已经报错（退化成「不可用」，同 [GpuRows] 对读不出来的字段的处理）。
+ *   负载那一行来自首屏快采，不受这两种状态影响，全程照常显示。
  */
 @Composable
-private fun CpuRows(cpu: CpuUsage, load: String, coresExpanded: Boolean, onToggleCores: () -> Unit) {
-    Meter(
-        label = if (cpu.coreCount > 0) pluralStringResource(R.plurals.monitor_cores, cpu.coreCount, cpu.coreCount)
-        else stringResource(R.string.monitor_cpu),
-        value = stringResource(R.string.monitor_percent, formatPercent(cpu.total)),
-        ratio = cpu.total.toFloat(),
-        // 单核机器展开了也只有一条和总览一模一样的进度条，没什么可看的
-        expanded = if (cpu.coreCount > 1) coresExpanded else null,
-        onToggle = onToggleCores,
-    )
-    if (coresExpanded) {
-        cpu.cores.forEachIndexed { index, usage ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Text(
-                    text = stringResource(R.string.monitor_core, index),
-                    modifier = Modifier.width(56.dp),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                LinearProgressIndicator(
-                    progress = { usage.toFloat() },
-                    modifier = Modifier.weight(1f).height(4.dp),
-                )
-                Text(
-                    text = stringResource(R.string.monitor_percent, formatPercent(usage)),
-                    modifier = Modifier.width(52.dp),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+private fun CpuRows(cpu: CpuUsage?, cpuPending: Boolean, load: String, coresExpanded: Boolean, onToggleCores: () -> Unit) {
+    when {
+        cpu != null -> {
+            Meter(
+                label = if (cpu.coreCount > 0) {
+                    pluralStringResource(R.plurals.monitor_cores, cpu.coreCount, cpu.coreCount)
+                } else {
+                    stringResource(R.string.monitor_cpu)
+                },
+                value = stringResource(R.string.monitor_percent, formatPercent(cpu.total)),
+                ratio = cpu.total.toFloat(),
+                // 单核机器展开了也只有一条和总览一模一样的进度条，没什么可看的
+                expanded = if (cpu.coreCount > 1) coresExpanded else null,
+                onToggle = onToggleCores,
+            )
+            if (coresExpanded) {
+                cpu.cores.forEachIndexed { index, usage ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.monitor_core, index),
+                            modifier = Modifier.width(56.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        LinearProgressIndicator(
+                            progress = { usage.toFloat() },
+                            modifier = Modifier.weight(1f).height(4.dp),
+                        )
+                        Text(
+                            text = stringResource(R.string.monitor_percent, formatPercent(usage)),
+                            modifier = Modifier.width(52.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             }
         }
+
+        cpuPending -> SkeletonMeter(rememberSkeletonAlpha())
+
+        else -> InfoRow(stringResource(R.string.monitor_cpu), stringResource(R.string.monitor_unavailable))
     }
     Text(
         text = load,
@@ -764,3 +862,11 @@ private fun uptimeText(seconds: Long): String {
 
 /** 90% 起报警。到这个水位时留给用户处理的时间已经不多了。 */
 private const val DISK_ALERT_RATIO = 0.9f
+
+/** 骨架屏系统段的占位行数：发行版 / 内核 / 主机名 / 运行时长，与 [SystemRows] 的常见行数对齐。 */
+private const val SKELETON_SYSTEM_ROWS = 4
+
+/** 骨架条脉动的最暗/最亮 alpha，比转圈指示器的 1100ms 一圈略快，读起来更像「马上就好」。 */
+private const val SKELETON_ALPHA_MIN = 0.35f
+private const val SKELETON_ALPHA_MAX = 0.75f
+private const val SKELETON_PULSE_MILLIS = 900

@@ -50,6 +50,30 @@ object HostFacts {
     )
 
     /**
+     * 两条命令共用的开场白：设 PATH、关 zsh 的 NOMATCH、判 procfs。抽出来是为了
+     * [QUICK_COMMAND] 和 [PROBE_COMMAND] 的这一段**逐字节相同**——两条命令都要在同一把
+     * `preflight` 判定下解析，写两遍迟早会漂移出一个不一致的版本。
+     */
+    private val PREAMBLE: List<String> = listOf(
+        // exec channel 是非交互 shell，不读 rc 文件，PATH 里可能没有 sbin
+        "export PATH=\"\$PATH:/usr/sbin:/sbin:/usr/local/bin\"",
+        // zsh 默认开 NOMATCH：通配符匹配不到时**报错并中止整条命令**，而不是像 sh / bash
+        // 那样保留字面量。GPU 段那两个 card 通配符在没有独显的机器上必然落空，
+        // 于是远端登录 shell 是 zsh 的主机连 __LM_END__ 都吐不出来，整页监控报「采集失败」。
+        // sh / bash 没有 setopt 这个内建，command not found 被 `|| true` 吞掉。
+        "setopt no_nomatch 2>/dev/null || true",
+        "if [ -r /proc/stat ]; then echo ${MARKER_PROCFS}1; else echo ${MARKER_PROCFS}0; fi",
+    )
+
+    /** 系统信息段：两条命令都要，且瞬时可得，抽出来避免 [QUICK_COMMAND] 漂移出第二份写法。 */
+    private val SYSTEM_COMMAND: List<String> = listOf(
+        "echo $MARKER_SYSTEM",
+        "echo \"$PREFIX_KERNEL\$(uname -sr 2>/dev/null)\"",
+        "echo \"$PREFIX_HOSTNAME\$(hostname 2>/dev/null || cat /proc/sys/kernel/hostname 2>/dev/null)\"",
+        "grep -m1 '^PRETTY_NAME=' /etc/os-release 2>/dev/null || head -n 1 /etc/issue 2>/dev/null",
+    )
+
+    /**
      * 采集命令。
      *
      * 顺序是有讲究的：两组采样（uptime + stat + net/dev）夹着 `sleep 1`，其余静态指标
@@ -61,36 +85,57 @@ object HostFacts {
      * `ps` 那条**允许失败**：busybox 的 ps 不认 `-eo`，段空了就是没有进程数据，
      * 不能因此判定整次采集失败（见 [parse]）。
      */
-    val PROBE_COMMAND: String = listOf(
-        // exec channel 是非交互 shell，不读 rc 文件，PATH 里可能没有 sbin
-        "export PATH=\"\$PATH:/usr/sbin:/sbin:/usr/local/bin\"",
-        // zsh 默认开 NOMATCH：通配符匹配不到时**报错并中止整条命令**，而不是像 sh / bash
-        // 那样保留字面量。GPU 段那两个 card 通配符在没有独显的机器上必然落空，
-        // 于是远端登录 shell 是 zsh 的主机连 __LM_END__ 都吐不出来，整页监控报「采集失败」。
-        // sh / bash 没有 setopt 这个内建，command not found 被 `|| true` 吞掉。
-        "setopt no_nomatch 2>/dev/null || true",
-        "if [ -r /proc/stat ]; then echo ${MARKER_PROCFS}1; else echo ${MARKER_PROCFS}0; fi",
-        "echo $MARKER_UPTIME1", "cat /proc/uptime 2>/dev/null",
-        "echo $MARKER_CPU1", "cat /proc/stat 2>/dev/null",
-        "echo $MARKER_NET1", "cat /proc/net/dev 2>/dev/null",
-        "sleep 1",
-        "echo $MARKER_UPTIME2", "cat /proc/uptime 2>/dev/null",
-        "echo $MARKER_CPU2", "cat /proc/stat 2>/dev/null",
-        "echo $MARKER_NET2", "cat /proc/net/dev 2>/dev/null",
-        "echo $MARKER_LOAD", "cat /proc/loadavg 2>/dev/null",
-        "echo $MARKER_MEM", "cat /proc/meminfo 2>/dev/null",
-        // -P 强制 POSIX 输出：不加它，长设备名会把一行拆成两行，解析必错
-        "echo $MARKER_DISK", "df -P -k 2>/dev/null",
-        "echo $MARKER_ADDR", ADDRESS_COMMAND,
-        "echo $MARKER_SYSTEM",
-        "echo \"$PREFIX_KERNEL\$(uname -sr 2>/dev/null)\"",
-        "echo \"$PREFIX_HOSTNAME\$(hostname 2>/dev/null || cat /proc/sys/kernel/hostname 2>/dev/null)\"",
-        "grep -m1 '^PRETTY_NAME=' /etc/os-release 2>/dev/null || head -n 1 /etc/issue 2>/dev/null",
-        "echo $MARKER_PS", PROCESS_COMMAND,
-        "echo $MARKER_GPU", GPU_COMMAND,
-        "echo $MARKER_DOCKER", CONTAINER_COMMAND,
-        "echo $MARKER_END",
-    ).joinToString("; ")
+    val PROBE_COMMAND: String = (
+        PREAMBLE +
+            listOf(
+                "echo $MARKER_UPTIME1", "cat /proc/uptime 2>/dev/null",
+                "echo $MARKER_CPU1", "cat /proc/stat 2>/dev/null",
+                "echo $MARKER_NET1", "cat /proc/net/dev 2>/dev/null",
+                "sleep 1",
+                "echo $MARKER_UPTIME2", "cat /proc/uptime 2>/dev/null",
+                "echo $MARKER_CPU2", "cat /proc/stat 2>/dev/null",
+                "echo $MARKER_NET2", "cat /proc/net/dev 2>/dev/null",
+                "echo $MARKER_LOAD", "cat /proc/loadavg 2>/dev/null",
+                "echo $MARKER_MEM", "cat /proc/meminfo 2>/dev/null",
+                // -P 强制 POSIX 输出：不加它，长设备名会把一行拆成两行，解析必错
+                "echo $MARKER_DISK", "df -P -k 2>/dev/null",
+                "echo $MARKER_ADDR", ADDRESS_COMMAND,
+            ) +
+            SYSTEM_COMMAND +
+            listOf(
+                "echo $MARKER_PS", PROCESS_COMMAND,
+                "echo $MARKER_GPU", GPU_COMMAND,
+                "echo $MARKER_DOCKER", CONTAINER_COMMAND,
+                "echo $MARKER_END",
+            )
+        ).joinToString("; ")
+
+    /**
+     * 首屏快采：只要瞬时可得、不依赖两次采样的那几项——负载 / 内存 / 磁盘 / 本机地址 /
+     * 系统信息 / 进程 Top。**不含** `sleep`、第二组采样、GPU、容器：那几项要么本身就慢
+     * （`docker stats`、`nvidia-smi`），要么必须靠差值算，快不了。
+     *
+     * 故意和 [PROBE_COMMAND] 重复采一遍 uptime / loadavg / meminfo / df 等：换来的是
+     * 两条命令各自独立解析、互不依赖对方的输出，不必在两段之间传状态。多这几十毫秒的
+     * shell 开销，在一次 SSH round-trip 面前可以忽略。
+     *
+     * @see MonitorRepository.probeQuick
+     */
+    val QUICK_COMMAND: String = (
+        PREAMBLE +
+            listOf(
+                "echo $MARKER_UPTIME1", "cat /proc/uptime 2>/dev/null",
+                "echo $MARKER_LOAD", "cat /proc/loadavg 2>/dev/null",
+                "echo $MARKER_MEM", "cat /proc/meminfo 2>/dev/null",
+                "echo $MARKER_DISK", "df -P -k 2>/dev/null",
+                "echo $MARKER_ADDR", ADDRESS_COMMAND,
+            ) +
+            SYSTEM_COMMAND +
+            listOf(
+                "echo $MARKER_PS", PROCESS_COMMAND,
+                "echo $MARKER_END",
+            )
+        ).joinToString("; ")
 
     /**
      * 进程 Top。**发两路**：CPU 倒序一路、内存倒序一路，合并后按 pid 去重（见 [parseProcesses]）。
@@ -212,18 +257,7 @@ object HostFacts {
      */
     fun parse(stdout: String): FactsResult {
         val lines = stdout.lines().map { it.trimEnd('\r') }
-
-        // 远端 shell 的 motd / rc 脚本会在我们的输出前面吐东西，一切从哨兵开始认。
-        val procfsLine = lines.firstOrNull { it.startsWith(MARKER_PROCFS) }
-            ?: return FactsResult.Malformed("missing $MARKER_PROCFS")
-        when (procfsLine.removePrefix(MARKER_PROCFS).trim()) {
-            "1" -> Unit
-            "0" -> return FactsResult.Unsupported
-            // 既不是 1 也不是 0，说明这行根本不是我们发的那个 echo
-            else -> return FactsResult.Malformed("bad procfs marker")
-        }
-        // 没有结束哨兵 = 输出被截断（超时、连接断在半路），后半段的缺失都不可信
-        if (lines.none { it == MARKER_END }) return FactsResult.Malformed("missing $MARKER_END")
+        preflight(lines)?.let { return it }
 
         val sections = split(lines)
 
@@ -262,6 +296,59 @@ object HostFacts {
                 containers = parseContainers(sections[MARKER_DOCKER], sections[MARKER_CSTATS]),
             )
         )
+    }
+
+    /**
+     * 解析 [QUICK_COMMAND] 的 stdout。
+     *
+     * 返回的 [HostSnapshot.cpu] 恒为 `null`——差值必须靠两次采样，这条命令只采了一次。
+     * **必需段**（uptime / loadavg / meminfo）缺失或畸形一律 [FactsResult.Malformed]；
+     * 其余可选段（磁盘 / 地址 / 进程 / 系统信息）缺了就是空，属正常，同 [parse]。
+     */
+    fun parseQuick(stdout: String): FactsResult {
+        val lines = stdout.lines().map { it.trimEnd('\r') }
+        preflight(lines)?.let { return it }
+
+        val sections = split(lines)
+
+        val uptime = firstDouble(sections[MARKER_UPTIME1]) ?: return FactsResult.Malformed("bad /proc/uptime")
+        val load = parseLoad(sections[MARKER_LOAD]) ?: return FactsResult.Malformed("bad /proc/loadavg")
+        val memory = parseMemory(sections[MARKER_MEM]) ?: return FactsResult.Malformed("bad /proc/meminfo")
+
+        return FactsResult.Ok(
+            HostSnapshot(
+                system = parseSystem(sections[MARKER_SYSTEM]),
+                uptimeSeconds = uptime.toLong(),
+                load = load,
+                cpu = null,
+                memory = memory.first,
+                swap = memory.second,
+                disks = parseDisks(sections[MARKER_DISK]),
+                addresses = parseAddresses(sections[MARKER_ADDR]).local,
+                processes = parseProcesses(sections[MARKER_PS]),
+            )
+        )
+    }
+
+    /**
+     * procfs 判定与结束哨兵校验，[parse] 与 [parseQuick] 共用。
+     *
+     * @return 非空时调用方直接把这个结果原样返回（[FactsResult.Unsupported] 或
+     *   [FactsResult.Malformed]）；`null` 表示前置检查通过，可以往下切段解析。
+     */
+    private fun preflight(lines: List<String>): FactsResult? {
+        // 远端 shell 的 motd / rc 脚本会在我们的输出前面吐东西，一切从哨兵开始认。
+        val procfsLine = lines.firstOrNull { it.startsWith(MARKER_PROCFS) }
+            ?: return FactsResult.Malformed("missing $MARKER_PROCFS")
+        when (procfsLine.removePrefix(MARKER_PROCFS).trim()) {
+            "1" -> Unit
+            "0" -> return FactsResult.Unsupported
+            // 既不是 1 也不是 0，说明这行根本不是我们发的那个 echo
+            else -> return FactsResult.Malformed("bad procfs marker")
+        }
+        // 没有结束哨兵 = 输出被截断（超时、连接断在半路），后半段的缺失都不可信
+        if (lines.none { it == MARKER_END }) return FactsResult.Malformed("missing $MARKER_END")
+        return null
     }
 
     /** 按哨兵切段。段缺失与段为空是两回事，但对调用方等价——都拿不到数据。 */

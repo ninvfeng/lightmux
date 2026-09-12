@@ -21,6 +21,17 @@ class MonitorRepository(private val pool: ExecPool) {
     }
 
     /**
+     * 首屏快采：只要瞬时可得的那几项（不含 CPU / 网卡速率，见 [HostFacts.QUICK_COMMAND]），
+     * 供骨架屏尽快填上真实数据。调用方只在还没有任何快照时发这一条，见
+     * [net.lighttools.lightmux.ui.monitor.MonitorViewModel.collect]。
+     *
+     * @throws java.io.IOException 连不上 / 超时
+     */
+    suspend fun probeQuick(host: Host): FactsResult = pool.withConnection(host) { connection ->
+        HostFacts.parseQuick(connection.exec(HostFacts.QUICK_COMMAND, QUICK_TIMEOUT_MS).stdout)
+    }
+
+    /**
      * 采一次公网 IP。
      *
      * 和 [probe] 分开发，是因为它要走外网、慢且几乎不变（见 [HostFacts.PUBLIC_IP_COMMAND]）。
@@ -42,6 +53,9 @@ class MonitorRepository(private val pool: ExecPool) {
          * （守护进程侧要采一轮 cgroup，自带 6 秒 timeout），比 tmux 探测宽松一大截。
          */
         const val PROBE_TIMEOUT_MS = 18_000L
+
+        /** 快采只读 `/proc` 与 `df`，外加一路 `ps`——远比全量命令轻，但连接慢的主机上仍要留够余量。 */
+        const val QUICK_TIMEOUT_MS = 8_000L
 
         /** 两个端点各 `--max-time 3`，封顶 6 秒；留两秒给 shell 启动和收尾。 */
         const val PUBLIC_IP_TIMEOUT_MS = 8_000L
