@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -153,7 +154,14 @@ class MonitorViewModel(
         // 首屏快采：只在还没有任何快照时发——一旦页面上已经有数据在显示，
         // 每 5 秒的稳态轮询没必要多打一条命令，那时全量命令本身就够快看到结果。
         if (state.snapshot == null) {
-            when (val quick = runCatching { repository.probeQuick(target) }.getOrNull()) {
+            val quick = try {
+                repository.probeQuick(target)
+            } catch (e: CancellationException) {
+                throw e // 取消不是错误，也不能被当成失败吞掉（同 FilesViewModel.scan）
+            } catch (e: Exception) {
+                null
+            }
+            when (quick) {
                 is FactsResult.Ok -> state = state.copy(snapshot = quick.snapshot, error = null)
                 // 这台机器连快采都判不支持，全量命令跑出来的结论只会一样，不必再等一次
                 FactsResult.Unsupported -> {
@@ -165,7 +173,13 @@ class MonitorViewModel(
             }
         }
 
-        val outcome = runCatching { repository.probe(target) }
+        val outcome = try {
+            Result.success(repository.probe(target))
+        } catch (e: CancellationException) {
+            throw e // 页面离开时 poller 被 cancel，探测正巧卡在这一句上——绝不能显示成「采集失败」
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
         state = outcome.fold(
             onSuccess = { result ->
                 when (result) {
