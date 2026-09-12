@@ -130,27 +130,21 @@ fun HostEditScreen(
                     error = HostFormError.Hostname in errors,
                 )
                 FieldDivider()
-                // 端口和用户名并排：两个都短，各占一行等于白扔一行的高度。
-                Row {
-                    FieldRow(
-                        label = stringResource(R.string.field_port),
-                        value = form.port,
-                        onValueChange = { v -> vm.update { it.copy(port = v) } },
-                        error = HostFormError.Port in errors,
-                        errorText = stringResource(R.string.error_port_invalid),
-                        keyboardType = KeyboardType.Number,
-                        labelWidth = NARROW_LABEL_WIDTH,
-                        modifier = Modifier.weight(1f),
-                    )
-                    FieldRow(
-                        label = stringResource(R.string.field_username),
-                        value = form.username,
-                        onValueChange = { v -> vm.update { it.copy(username = v) } },
-                        error = HostFormError.Username in errors,
-                        labelWidth = NARROW_LABEL_WIDTH,
-                        modifier = Modifier.weight(1.3f),
-                    )
-                }
+                FieldRow(
+                    label = stringResource(R.string.field_port),
+                    value = form.port,
+                    onValueChange = { v -> vm.update { it.copy(port = v) } },
+                    error = HostFormError.Port in errors,
+                    errorText = stringResource(R.string.error_port_invalid),
+                    keyboardType = KeyboardType.Number,
+                )
+                FieldDivider()
+                FieldRow(
+                    label = stringResource(R.string.field_username),
+                    value = form.username,
+                    onValueChange = { v -> vm.update { it.copy(username = v) } },
+                    error = HostFormError.Username in errors,
+                )
             }
 
             val keptHint = stringResource(R.string.secret_kept).takeIf { form.keepSecret }
@@ -549,9 +543,6 @@ private fun ProxyJumpPicker(
 
 /** 左栏标签宽度。中文四字、英文 "Key passphrase" 都按这个宽度对齐。 */
 private val LABEL_WIDTH = 96.dp
-
-/** 端口 / 用户名并排时的标签宽度——那一行两个标签都只有两三个字。 */
-private val NARROW_LABEL_WIDTH = 44.dp
 
 private val FIELD_PADDING_H = 14.dp
 
