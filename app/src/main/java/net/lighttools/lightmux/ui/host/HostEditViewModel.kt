@@ -241,6 +241,12 @@ class HostEditViewModel(
         val host = form.toHost(existing)
         viewModelScope.launch {
             hostStore.upsert(host)
+            // 新建场景下这个 VM 实例会被下一次点「添加主机」复用（key 恒定），
+            // 不清空的话表单会带着这次填的内容再打开一遍
+            if (hostId == null) {
+                form = HostForm()
+                test = HostTest.Idle
+            }
             onSaved()
         }
     }
