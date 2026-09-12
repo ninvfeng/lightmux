@@ -21,6 +21,7 @@ import net.schmizz.sshj.userauth.keyprovider.FileKeyProvider
 import net.schmizz.sshj.userauth.keyprovider.KeyProviderUtil
 import net.schmizz.sshj.userauth.method.AuthKeyboardInteractive
 import net.schmizz.sshj.userauth.method.AuthMethod as SshjAuthMethod
+import net.schmizz.sshj.userauth.method.AuthNone
 import net.schmizz.sshj.userauth.method.AuthPassword
 import net.schmizz.sshj.userauth.method.AuthPublickey
 import net.schmizz.sshj.userauth.method.ChallengeResponseProvider
@@ -242,6 +243,7 @@ class SshConnection(
             is AuthMethod.PrivateKey -> AuthPublickey(keyProvider(auth))
             AuthMethod.Agent ->
                 throw UnsupportedOperationException("ssh-agent authentication is not supported yet")
+            AuthMethod.None -> AuthNone()
         }
 
         val newResponder = ChallengeResponder(client, target, authChallenges)

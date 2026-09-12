@@ -71,4 +71,12 @@ sealed interface AuthMethod {
 
     /** 占位：V1 不实现 ssh-agent，认证时会抛 [UnsupportedOperationException]。 */
     data object Agent : AuthMethod
+
+    /**
+     * 真正实现的「无凭据」认证：SSH 协议里的 `none` 方法，密码和私钥都不问。
+     *
+     * 少数服务端本来就不需要认证（比如临时云开发环境的会话网关，身份信息已经编在用户名里），
+     * 硬逼用户填一个密码或私钥占位既没有意义、连上去也没用。
+     */
+    data object None : AuthMethod
 }

@@ -57,6 +57,19 @@ class HostFormTest {
     }
 
     @Test
+    fun `无需认证时密码和私钥都留空也不算错`() {
+        val form = valid().copy(authKind = AuthKind.None, password = "", pem = "")
+        assertTrue(form.validate().isEmpty())
+        assertEquals(AuthMethod.None, form.toHost().auth)
+    }
+
+    @Test
+    fun `无需认证的主机回填表单时选中对应的认证方式`() {
+        val host = Host(name = "n", hostname = "h", username = "u", auth = AuthMethod.None)
+        assertEquals(AuthKind.None, HostForm.of(host).authKind)
+    }
+
+    @Test
     fun `名称留空就用主机名兜底，空命令存 null`() {
         val host = valid().copy(name = "  ", loginCommand = "").toHost()
         assertEquals("8.138.125.201", host.name)

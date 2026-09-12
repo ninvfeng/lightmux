@@ -157,6 +157,11 @@ class StoreCodecTest {
         assertEquals(AuthMethod.Agent, roundTrip(AuthMethod.Agent))
     }
 
+    @Test
+    fun `无需认证往返不变`() {
+        assertEquals(AuthMethod.None, roundTrip(AuthMethod.None))
+    }
+
     // ---- 密钥库 ----
 
     @Test

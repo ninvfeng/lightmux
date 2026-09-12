@@ -5,7 +5,7 @@ import net.lighttools.lightmux.data.Host
 import net.lighttools.lightmux.data.SshKey
 import java.util.UUID
 
-enum class AuthKind { Password, PrivateKey }
+enum class AuthKind { Password, PrivateKey, None }
 
 enum class HostFormError { Hostname, Port, Username, Secret }
 
@@ -48,7 +48,7 @@ data class HostForm(
         if (hostname.isBlank()) add(HostFormError.Hostname)
         if (port.trim().toIntOrNull() !in 1..65535) add(HostFormError.Port)
         if (username.isBlank()) add(HostFormError.Username)
-        if (!keepSecret && !usesStoredKey) {
+        if (authKind != AuthKind.None && !keepSecret && !usesStoredKey) {
             val secret = if (authKind == AuthKind.Password) password else pem
             if (secret.isBlank()) add(HostFormError.Secret)
         }
@@ -70,6 +70,8 @@ data class HostForm(
             AuthKind.PrivateKey -> keyId?.let { AuthMethod.PrivateKey("", null, keyId = it) }
                 ?: (existing?.auth as? AuthMethod.PrivateKey)?.takeIf { keepSecret && it.keyId == null }
                 ?: AuthMethod.PrivateKey(pem.trim(), passphrase.ifBlank { null })
+
+            AuthKind.None -> AuthMethod.None
         }
         val cleanHostname = hostname.trim()
         return Host(
@@ -119,7 +121,11 @@ data class HostForm(
             hostname = host.hostname,
             port = host.port.toString(),
             username = host.username,
-            authKind = if (host.auth is AuthMethod.PrivateKey) AuthKind.PrivateKey else AuthKind.Password,
+            authKind = when (host.auth) {
+                is AuthMethod.PrivateKey -> AuthKind.PrivateKey
+                AuthMethod.None -> AuthKind.None
+                else -> AuthKind.Password
+            },
             // 明文一律不进表单，连 State 都不放：截屏、无障碍读屏、状态恢复都可能把它抖出去。
             password = "",
             pem = "",
@@ -157,6 +163,7 @@ data class HostForm(
                 // 再显示一句「已保存，留空表示不修改」只会让人以为表单里还藏着一份 PEM。
                 is AuthMethod.PrivateKey -> a.keyId == null && a.pem.isNotEmpty()
                 AuthMethod.Agent -> false
+                AuthMethod.None -> false
             }
     }
 }

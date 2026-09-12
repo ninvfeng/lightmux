@@ -209,6 +209,9 @@ class HostEditViewModel(
                 keyId = key?.keyId,
                 keepSecret = key != null && key.keyId == null && key.pem.isNotEmpty(),
             )
+
+            // 无需认证没有任何凭据可沿用
+            AuthKind.None -> form.copy(authKind = kind, keyId = null, keepSecret = false)
         }
     }
 

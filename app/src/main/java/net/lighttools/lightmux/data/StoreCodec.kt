@@ -31,6 +31,7 @@ object StoreCodec {
     const val TYPE_PASSWORD = "password"
     const val TYPE_KEY = "key"
     const val TYPE_AGENT = "agent"
+    const val TYPE_NONE = "none"
 
     /**
      * 读-改-写里「该不该写」的那一步。
@@ -89,6 +90,7 @@ object StoreCodec {
             }
 
             TYPE_AGENT -> AuthMethod.Agent
+            TYPE_NONE -> AuthMethod.None
             else -> {
                 val plain = raw?.password?.let(decrypt)
                 val lost = raw?.password != null && plain == null
@@ -121,6 +123,7 @@ object StoreCodec {
         )
 
         AuthMethod.Agent -> RawAuth(type = TYPE_AGENT)
+        AuthMethod.None -> RawAuth(type = TYPE_NONE)
     }
 
     /**

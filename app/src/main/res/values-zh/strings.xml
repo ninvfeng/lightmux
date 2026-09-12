@@ -92,6 +92,8 @@
     <string name="field_auth">认证方式</string>
     <string name="auth_password">密码</string>
     <string name="auth_key">私钥</string>
+    <string name="auth_none">无需认证</string>
+    <string name="auth_none_hint">部分服务器允许免密码免私钥直接登录(如临时云开发环境的会话网关)</string>
     <string name="field_key_source">私钥来源</string>
     <string name="key_source_paste">直接粘贴</string>
     <string name="key_source_missing">密钥已被删除</string>

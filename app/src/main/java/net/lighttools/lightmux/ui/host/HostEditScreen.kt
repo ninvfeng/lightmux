@@ -166,6 +166,11 @@ fun HostEditScreen(
                         onClick = { vm.setAuthKind(AuthKind.PrivateKey) },
                         label = { Text(stringResource(R.string.auth_key)) },
                     )
+                    FilterChip(
+                        selected = form.authKind == AuthKind.None,
+                        onClick = { vm.setAuthKind(AuthKind.None) },
+                        label = { Text(stringResource(R.string.auth_none)) },
+                    )
                 }
                 when (form.authKind) {
                     AuthKind.Password -> {
@@ -218,6 +223,16 @@ fun HostEditScreen(
                                 secret = true,
                             )
                         }
+                    }
+
+                    AuthKind.None -> {
+                        FieldDivider()
+                        Text(
+                            text = stringResource(R.string.auth_none_hint),
+                            modifier = Modifier.padding(horizontal = FIELD_PADDING_H, vertical = 12.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
             }

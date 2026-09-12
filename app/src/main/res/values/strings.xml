@@ -97,6 +97,8 @@
     <string name="field_auth">Authentication</string>
     <string name="auth_password">Password</string>
     <string name="auth_key">Private key</string>
+    <string name="auth_none">No credential</string>
+    <string name="auth_none_hint">Some servers grant login without a password or key (e.g. temporary cloud dev session gateways)</string>
     <string name="field_key_source">Key source</string>
     <string name="key_source_paste">Paste below</string>
     <string name="key_source_missing">Key was deleted</string>
