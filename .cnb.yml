@@ -38,7 +38,7 @@ main:
         - name: 单测与 release 构建
           script:
             - chmod +x gradlew
-            - ./gradlew test assembleRelease --no-daemon --stacktrace
+            - ./gradlew test assembleRelease --no-daemon --stacktrace --init-script scripts/ci-mirror.gradle
 
   # 复用同一套检查。PR 拿不到签名密钥（见文件头），所以外部贡献者的分支跑在这里是安全的。
   pull_request: *ci
@@ -111,7 +111,7 @@ $:
               else
                 echo "→ 回退 debug 签名"
               fi
-              ./gradlew test assembleRelease --no-daemon --stacktrace
+              ./gradlew test assembleRelease --no-daemon --stacktrace --init-script scripts/ci-mirror.gradle
 
         # 守卫：确认产物存在，且在有密钥时真的用了正式签名。
         # 回退到 debug 签名的包能装但无法覆盖升级，发出去就是一次废版本。

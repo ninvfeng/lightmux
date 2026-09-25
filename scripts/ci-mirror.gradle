@@ -1,0 +1,13 @@
+// 仅 CNB 流水线加载（见 .cnb.yml 的 --init-script）：CNB 构建机访问 Maven Central
+// 会被限流（HTTP 429），缓存卷一失效就整条发版流水线下不来依赖。
+// 原地改 URL 而不是往前插一个镜像仓库：保留 settings 里的仓库顺序与 content 过滤，
+// google 的包不会先去阿里云白跑一趟 404。
+settingsEvaluated { settings ->
+    [settings.pluginManagement.repositories, settings.dependencyResolutionManagement.repositories].each { repos ->
+        repos.withType(MavenArtifactRepository).configureEach { repo ->
+            if (repo.url.toString().startsWith('https://repo.maven.apache.org/maven2')) {
+                repo.url = 'https://maven.aliyun.com/repository/public'
+            }
+        }
+    }
+}
