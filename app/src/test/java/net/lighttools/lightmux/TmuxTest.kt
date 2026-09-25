@@ -75,7 +75,7 @@ class TmuxTest {
     @Test
     fun `attach 用 new-session -A，接管才加 -D`() {
         val cmd = Tmux.attachCommand("main")
-        assertTrue(cmd.endsWith("tmux new-session -A -s 'main'"))
+        assertTrue(cmd.endsWith("tmux -u new-session -A -s 'main'"))
         // 踢别人是用户的决定，走「断开其他客户端」，attach 不顺手替他做（自动重连也走这条）
         assertFalse(cmd.contains("-D"))
     }
@@ -84,7 +84,7 @@ class TmuxTest {
     fun `名字里的空格与单引号被正确转义`() {
         assertEquals("'my session'", Tmux.quote("my session"))
         assertEquals("""'it'\''s mine'""", Tmux.quote("it's mine"))
-        assertTrue(Tmux.attachCommand("it's mine").endsWith("tmux new-session -A -s 'it'\\''s mine'"))
+        assertTrue(Tmux.attachCommand("it's mine").endsWith("tmux -u new-session -A -s 'it'\\''s mine'"))
     }
 
     // ---- 镜像会话（尺寸互抢） --------------------------------------------------
@@ -95,12 +95,12 @@ class TmuxTest {
         val branches = cmd.split(" || ")
         assertEquals(3, branches.size)
         // 一、有别的客户端 -> 建分组镜像
-        assertTrue(branches[0].startsWith("[ -n \"\$(tmux list-clients -t '=dev' 2>/dev/null)\" ] &&"))
+        assertTrue(branches[0].startsWith("[ -n \"\$(tmux -u list-clients -t '=dev' 2>/dev/null)\" ] &&"))
         assertTrue(branches[0].contains("new-session -d -t '=dev' -s 'dev (lightmux)'"))
         // 二、没人连 -> 直连原会话，零足迹
-        assertEquals("tmux attach-session -t '=dev' 2>/dev/null", branches[1])
+        assertEquals("tmux -u attach-session -t '=dev' 2>/dev/null", branches[1])
         // 三、会话没了（缓存过期）-> 建一个同名的，而不是甩一句「会话不存在」
-        assertEquals("tmux new-session -A -s 'dev'", branches[2])
+        assertEquals("tmux -u new-session -A -s 'dev'", branches[2])
     }
 
     @Test
@@ -108,7 +108,7 @@ class TmuxTest {
         // 分成两次调用的话，中间那一瞬镜像没人 attach，server 下一轮检查就把它销毁了
         val mirror = Tmux.attachCommand("dev").split(" || ")[0]
         assertEquals(1, Regex("tmux ").findAll(mirror.substringAfter("] && ")).count())
-        val steps = mirror.substringAfter("] && tmux ").split(" \\; ")
+        val steps = mirror.substringAfter("] && tmux -u ").split(" \\; ")
         assertEquals("new-session -d -t '=dev' -s 'dev (lightmux)'", steps[0])
         assertEquals("set-option destroy-unattached on", steps[1])
         assertTrue(steps[2].startsWith("attach-session -t '=dev (lightmux)'"))
@@ -145,46 +145,46 @@ class TmuxTest {
     @Test
     fun `名字里的分号与反引号不会逃出引号`() {
         val cmd = Tmux.killSessionCommand("a; rm -rf /")
-        assertEquals("tmux kill-session -t '=a; rm -rf /'", cmd)
+        assertEquals("tmux -u kill-session -t '=a; rm -rf /'", cmd)
         assertEquals("'\$(whoami)`id`'", Tmux.quote("\$(whoami)`id`"))
     }
 
     @Test
     fun `中文会话名照常转义`() {
-        assertTrue(Tmux.attachCommand("部署 机").endsWith("tmux new-session -A -s '部署 机'"))
+        assertTrue(Tmux.attachCommand("部署 机").endsWith("tmux -u new-session -A -s '部署 机'"))
     }
 
     @Test
     fun `kill 与 rename 用等号前缀强制精确匹配`() {
         // 不加 = 的话 tmux 允许前缀匹配，kill dev 有机会打到 dev2 上
-        assertEquals("tmux kill-session -t '=dev'", Tmux.killSessionCommand("dev"))
-        assertEquals("tmux rename-session -t '=dev' 'prod'", Tmux.renameSessionCommand("dev", "prod"))
-        assertEquals("tmux detach-client -s '=dev'", Tmux.detachOthersCommand("dev"))
+        assertEquals("tmux -u kill-session -t '=dev'", Tmux.killSessionCommand("dev"))
+        assertEquals("tmux -u rename-session -t '=dev' 'prod'", Tmux.renameSessionCommand("dev", "prod"))
+        assertEquals("tmux -u detach-client -s '=dev'", Tmux.detachOthersCommand("dev"))
     }
 
     @Test
     fun `窗口切换用 @id 而不是会话名冒号索引`() {
         val select = Tmux.selectWindowCommand("main", "@7", SERVER_PID)!!
-        assertTrue(select.endsWith("tmux select-window -t '@7'"))
+        assertTrue(select.endsWith("tmux -u select-window -t '@7'"))
         val cmd = Tmux.attachWindowCommand("main", "@7", SERVER_PID)
-        assertTrue(cmd.contains("tmux select-window -t '@7'"))
-        assertTrue(cmd.endsWith("tmux new-session -A -s 'main'"))
+        assertTrue(cmd.contains("tmux -u select-window -t '@7'"))
+        assertTrue(cmd.endsWith("tmux -u new-session -A -s 'main'"))
         // 缓存里的 @id 可能已经没了，切失败也要落到会话里，所以吞掉它的错误
         assertTrue(cmd.contains("2>/dev/null"))
     }
 
     @Test
     fun `动作命令包上退出码首行且合并 stderr`() {
-        val wrapped = Tmux.action("tmux kill-session -t '=x'")
+        val wrapped = Tmux.action("tmux -u kill-session -t '=x'")
         assertTrue(wrapped.contains("2>&1"))
         assertTrue(wrapped.contains("${Tmux.MARKER_RC}\$rc"))
-        assertTrue(wrapped.contains("tmux kill-session -t '=x'"))
+        assertTrue(wrapped.contains("tmux -u kill-session -t '=x'"))
     }
 
     @Test
     fun `动作命令和探测命令补同一份 PATH`() {
         // 只补探测那半边时，tmux 装在 /usr/local/bin 的机器上列表照常显示、窗口却切不动
-        assertTrue(Tmux.action("tmux select-window -t '@7'").startsWith("${Tmux.PATH_FIX};"))
+        assertTrue(Tmux.action("tmux -u select-window -t '@7'").startsWith("${Tmux.PATH_FIX};"))
         assertTrue(Tmux.PROBE_COMMAND.startsWith("${Tmux.PATH_FIX};"))
     }
 
@@ -467,7 +467,7 @@ class TmuxTest {
     fun `新建窗口用等号前缀且不自己 select`() {
         // tmux 建完就把新窗口选为当前窗口，再 select 一次是多余往返
         assertEquals(
-            "tmux new-window -t '=dev (lightmux)' 2>/dev/null || tmux new-window -t '=dev'",
+            "tmux -u new-window -t '=dev (lightmux)' 2>/dev/null || tmux -u new-window -t '=dev'",
             Tmux.newWindowCommand("dev"),
         )
         assertFalse(Tmux.newWindowCommand("dev").contains("select-window"))
@@ -477,9 +477,9 @@ class TmuxTest {
     fun `侧通道动作优先打在镜像上，免得把电脑那块屏拽走`() {
         // 光给一个 @id 在成组时是歧义的：实测 tmux 会挑「最近活动的那个会话」
         val select = Tmux.selectWindowCommand("dev", "@3", SERVER_PID)!!
-        assertTrue(select.contains("tmux select-window -t '=dev (lightmux):@3' 2>/dev/null ||"))
+        assertTrue(select.contains("tmux -u select-window -t '=dev (lightmux):@3' 2>/dev/null ||"))
         // 镜像不在（这次没走镜像分支 / 已被回收）就落回原会话，退化成改动前的行为
-        assertTrue(select.endsWith("tmux select-window -t '@3'"))
+        assertTrue(select.endsWith("tmux -u select-window -t '@3'"))
     }
 
     @Test
@@ -488,8 +488,8 @@ class TmuxTest {
         val branches = cmd.split(" || ")
         // 镜像分支里的 new-window 不带 -t：新窗口 link 进整个组，但只在镜像里被选中
         assertTrue(branches[0].contains("\\; new-window \\;"))
-        assertTrue(branches[1].startsWith("tmux new-window -t '=it'\\''s mine' \\; attach-session"))
-        assertTrue(cmd.endsWith("tmux new-session -A -s 'it'\\''s mine'"))
+        assertTrue(branches[1].startsWith("tmux -u new-window -t '=it'\\''s mine' \\; attach-session"))
+        assertTrue(cmd.endsWith("tmux -u new-session -A -s 'it'\\''s mine'"))
         // 会话刚被 kill 时建窗口会失败，那时 -A 会把它重新建出来，用户仍然落在终端里
         assertTrue(cmd.contains("2>/dev/null"))
     }
@@ -498,7 +498,7 @@ class TmuxTest {
     fun `关窗口用 @id 而不是会话名冒号索引`() {
         // index 会随着窗口增删往前挪，拿它 kill 就是在关隔壁那个，而这个动作不可逆
         val cmd = Tmux.killWindowCommand("@7", SERVER_PID)!!
-        assertTrue(cmd.endsWith("tmux kill-window -t '@7'"))
+        assertTrue(cmd.endsWith("tmux -u kill-window -t '@7'"))
         assertFalse(cmd.substringAfter("kill-window").contains(":"))
     }
 
@@ -572,8 +572,8 @@ class TmuxTest {
         // 登录命令不能 exit，切错窗口虽可逆但仍是错的，所以用 && 短路而不是 || exit
         val cmd = Tmux.attachWindowCommand("main", "@3", SERVER_PID)
         assertFalse(cmd.contains("exit ${ActionResult.STALE}"))
-        assertTrue(cmd.contains("] && tmux select-window"))
-        assertTrue(cmd.endsWith("tmux new-session -A -s 'main'"))
+        assertTrue(cmd.contains("] && tmux -u select-window"))
+        assertTrue(cmd.endsWith("tmux -u new-session -A -s 'main'"))
         // serverId 为空（旧缓存）就退化成纯 attach，落在会话的当前窗口上
         assertEquals(Tmux.attachCommand("main"), Tmux.attachWindowCommand("main", "@3", null))
     }

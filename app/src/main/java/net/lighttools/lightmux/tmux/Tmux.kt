@@ -5,6 +5,11 @@ package net.lighttools.lightmux.tmux
  * 这一层的单测是整个 M2 唯一能自证正确的手段（PRD §6.2）。
  *
  * 调用方（[TmuxRepository]）只负责「把命令丢给 `SshConnection.exec()`、把回来的字符串喂进来」。
+ *
+ * **所有 tmux 调用一律带 `-u`**：tmux 靠客户端的 `LC_ALL/LC_CTYPE/LANG` 判断能否输出 UTF-8，
+ * 判不出就把全部非 ASCII 字符换成 `_`——终端画面、状态栏、`list-sessions` 的输出一起坏。
+ * 我们不发 `LANG` 环境变量，很多容器 / 精简系统的登录 shell 也没设 locale，而我们的终端
+ * 本来就是 UTF-8，直接告诉 tmux 最稳。
  */
 object Tmux {
 
@@ -35,7 +40,7 @@ object Tmux {
      *
      * stderr 丢掉：没有 server 时 tmux 会往 stderr 吼「no server running」，那不是错误。
      */
-    const val SERVER_PID_EXPR = "tmux display-message -p '#{pid}' 2>/dev/null"
+    const val SERVER_PID_EXPR = "tmux -u display-message -p '#{pid}' 2>/dev/null"
 
     /**
      * 认得出来的包管理器，**按优先级排**：Debian 系上 `apt-get` 与 `yum` 可能同时装着
@@ -128,9 +133,9 @@ object Tmux {
             "echo \"$MARKER_PM\$pm:\$(id -u)\"; fi",
         "echo \"$MARKER_SERVER\$($SERVER_PID_EXPR)\"",
         "echo $MARKER_SESSIONS",
-        "tmux list-sessions -F '$SESSION_FORMAT' 2>/dev/null",
+        "tmux -u list-sessions -F '$SESSION_FORMAT' 2>/dev/null",
         "echo $MARKER_WINDOWS",
-        "tmux list-windows -a -F '$WINDOW_FORMAT' 2>/dev/null",
+        "tmux -u list-windows -a -F '$WINDOW_FORMAT' 2>/dev/null",
         "echo $MARKER_END",
     ).joinToString("; ")
 
@@ -169,7 +174,7 @@ object Tmux {
      * 直接列出客户端，有输出就是有人连着。
      */
     private fun hasOtherClient(name: String): String =
-        "[ -n \"\$(tmux list-clients -t ${target(name)} 2>/dev/null)\" ]"
+        "[ -n \"\$(tmux -u list-clients -t ${target(name)} 2>/dev/null)\" ]"
 
     /**
      * 建镜像会话并 attach 的 **单条 tmux 命令列表**。三条纪律缠在一起，改之前先读完：
@@ -193,12 +198,12 @@ object Tmux {
         val mirror = mirrorName(name)
         val steps = listOf("new-session -d -t ${target(name)} -s ${quote(mirror)}") + extra +
             listOf("set-option destroy-unattached on", "attach-session -t ${target(mirror)}")
-        return "tmux " + steps.joinToString(" \\; ") + " 2>/dev/null"
+        return "tmux -u " + steps.joinToString(" \\; ") + " 2>/dev/null"
     }
 
     /** 不走镜像时的 attach，同样包成一次 tmux 调用，好让整条链只靠 `&&` / `||` 串起来。 */
     private fun directAttach(name: String, extra: List<String>): String =
-        "tmux " + (extra + "attach-session -t ${target(name)}").joinToString(" \\; ") + " 2>/dev/null"
+        "tmux -u " + (extra + "attach-session -t ${target(name)}").joinToString(" \\; ") + " 2>/dev/null"
 
     /**
      * 三段式 attach：**镜像 → 直连 → 新建**，全靠 `||` 串，中间不许出现 `;`。
@@ -227,7 +232,7 @@ object Tmux {
         val prefix = guard?.let { "$it && " }.orEmpty()
         val mirror = "$prefix${hasOtherClient(name)} && ${mirrorAttach(name, mirrorExtra)}"
         val direct = "$prefix${directAttach(name, directExtra)}"
-        return "$mirror || $direct || tmux new-session -A -s ${quote(name)}"
+        return "$mirror || $direct || tmux -u new-session -A -s ${quote(name)}"
     }
 
     /**
@@ -279,8 +284,8 @@ object Tmux {
      */
     fun selectWindowCommand(session: String, windowId: String, serverId: String?): String? = serverId?.let {
         val select = preferMirror(
-            mirrorCommand = "tmux select-window -t ${quote("=${mirrorName(session)}:$windowId")}",
-            fallback = "tmux select-window -t ${quote(windowId)}",
+            mirrorCommand = "tmux -u select-window -t ${quote("=${mirrorName(session)}:$windowId")}",
+            fallback = "tmux -u select-window -t ${quote(windowId)}",
         )
         "${requireServer(it)} || exit ${ActionResult.STALE}; $select"
     }
@@ -295,8 +300,8 @@ object Tmux {
      * 只是不会被拽过去——见 [preferMirror]。
      */
     fun newWindowCommand(session: String): String = preferMirror(
-        mirrorCommand = "tmux new-window -t ${target(mirrorName(session))}",
-        fallback = "tmux new-window -t ${target(session)}",
+        mirrorCommand = "tmux -u new-window -t ${target(mirrorName(session))}",
+        fallback = "tmux -u new-window -t ${target(session)}",
     )
 
     /**
@@ -327,15 +332,15 @@ object Tmux {
      * `serverId` 为 null（旧版缓存没有这一行）时干脆不生成命令，让调用方先刷新。
      */
     fun killWindowCommand(windowId: String, serverId: String?): String? =
-        serverId?.let { "${requireServer(it)} || exit ${ActionResult.STALE}; tmux kill-window -t ${quote(windowId)}" }
+        serverId?.let { "${requireServer(it)} || exit ${ActionResult.STALE}; tmux -u kill-window -t ${quote(windowId)}" }
 
     fun renameSessionCommand(from: String, to: String): String =
-        "tmux rename-session -t ${target(from)} ${quote(to)}"
+        "tmux -u rename-session -t ${target(from)} ${quote(to)}"
 
-    fun killSessionCommand(name: String): String = "tmux kill-session -t ${target(name)}"
+    fun killSessionCommand(name: String): String = "tmux -u kill-session -t ${target(name)}"
 
     /** 把附加在这个会话上的其他客户端踢掉（比如桌面上那个把窗口尺寸拖小的）。 */
-    fun detachOthersCommand(name: String): String = "tmux detach-client -s ${target(name)}"
+    fun detachOthersCommand(name: String): String = "tmux -u detach-client -s ${target(name)}"
 
     /**
      * 安装 tmux 的命令，认不出包管理器时返回 null（UI 只能让用户自己装）。

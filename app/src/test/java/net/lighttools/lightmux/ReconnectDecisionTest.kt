@@ -124,7 +124,7 @@ class ReconnectDecisionTest {
     @Test
     fun `tmux 会话重连时不带 -D，绝不踢掉别的客户端`() {
         // 手机断线是常态，自动重连要是带 -D，用户电脑上的 tmux 每断一次就被 detach 一次
-        val cmd = reconnectLoginCommand(tmuxSession = "dev", loginCommand = "tmux new-session -A -s 'dev'")
+        val cmd = reconnectLoginCommand(tmuxSession = "dev", loginCommand = "tmux -u new-session -A -s 'dev'")
         assertFalse(cmd!!.contains("-D"))
         assertEquals(Tmux.attachCommand("dev"), cmd)
     }
@@ -139,7 +139,7 @@ class ReconnectDecisionTest {
 
     @Test
     fun `会话名里的引号在重连命令里仍被转义`() {
-        assertTrue(reconnectLoginCommand("it's mine", null)!!.endsWith("tmux new-session -A -s 'it'\\''s mine'"))
+        assertTrue(reconnectLoginCommand("it's mine", null)!!.endsWith("tmux -u new-session -A -s 'it'\\''s mine'"))
     }
 
     @Test
