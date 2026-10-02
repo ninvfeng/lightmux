@@ -44,6 +44,16 @@ class MonitorRepository(private val pool: ExecPool) {
         HostFacts.parsePublicAddress(connection.exec(HostFacts.PUBLIC_IP_COMMAND, PUBLIC_IP_TIMEOUT_MS).stdout)
     }
 
+    /**
+     * 主页主机行的轻量采样，见 [HostPulse]。
+     *
+     * @return null = 输出看不懂或没有 `/proc`
+     * @throws java.io.IOException 连不上 / 超时
+     */
+    suspend fun probePulse(host: Host): HostPulse.Sample? = pool.withConnection(host) { connection ->
+        HostPulse.parse(connection.exec(HostPulse.COMMAND, QUICK_TIMEOUT_MS).stdout)
+    }
+
     /** 离开监控页时放掉为它拨的连接；复用终端会话的那条不在池子里，关不到。 */
     suspend fun release(hostId: String) = pool.release(hostId)
 

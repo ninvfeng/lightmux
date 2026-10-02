@@ -171,6 +171,9 @@
     <string name="snapshot_days">%1$d 天前</string>
 
     <!-- 监控页。KiB/MiB、↑↓、% 是通用符号，和键帽一样不做本地化 -->
+    <string name="home_monitor_show">在列表显示监控</string>
+    <string name="home_monitor_hide">关闭列表监控</string>
+    <string name="home_monitor_unavailable">监控不可用</string>
     <string name="monitor_system">系统</string>
     <string name="monitor_distro">发行版</string>
     <string name="monitor_kernel">内核</string>

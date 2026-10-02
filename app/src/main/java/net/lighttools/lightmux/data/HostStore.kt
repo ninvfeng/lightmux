@@ -93,6 +93,7 @@ class HostStore(private val context: Context, private val keyStore: SshKeyStore)
         put("username", host.username)
         putOpt("loginCommand", host.loginCommand)
         putOpt("proxyJumpId", host.proxyJumpId)
+        if (host.homeMonitor) put("homeMonitor", true)
         put("auth", encodeAuth(host.auth))
     }
 
@@ -107,6 +108,7 @@ class HostStore(private val context: Context, private val keyStore: SshKeyStore)
             auth = decodeAuth(json.optJSONObject("auth"), keys),
             loginCommand = json.optStringOrNull("loginCommand"),
             proxyJumpId = json.optStringOrNull("proxyJumpId"),
+            homeMonitor = json.optBoolean("homeMonitor"),
         )
     }
 

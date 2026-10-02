@@ -54,7 +54,7 @@ object HostFacts {
      * [QUICK_COMMAND] 和 [PROBE_COMMAND] 的这一段**逐字节相同**——两条命令都要在同一把
      * `preflight` 判定下解析，写两遍迟早会漂移出一个不一致的版本。
      */
-    private val PREAMBLE: List<String> = listOf(
+    internal val PREAMBLE: List<String> = listOf(
         // exec channel 是非交互 shell，不读 rc 文件，PATH 里可能没有 sbin
         "export PATH=\"\$PATH:/usr/sbin:/sbin:/usr/local/bin\"",
         // zsh 默认开 NOMATCH：通配符匹配不到时**报错并中止整条命令**，而不是像 sh / bash
@@ -336,7 +336,7 @@ object HostFacts {
      * @return 非空时调用方直接把这个结果原样返回（[FactsResult.Unsupported] 或
      *   [FactsResult.Malformed]）；`null` 表示前置检查通过，可以往下切段解析。
      */
-    private fun preflight(lines: List<String>): FactsResult? {
+    internal fun preflight(lines: List<String>): FactsResult? {
         // 远端 shell 的 motd / rc 脚本会在我们的输出前面吐东西，一切从哨兵开始认。
         val procfsLine = lines.firstOrNull { it.startsWith(MARKER_PROCFS) }
             ?: return FactsResult.Malformed("missing $MARKER_PROCFS")
@@ -352,7 +352,7 @@ object HostFacts {
     }
 
     /** 按哨兵切段。段缺失与段为空是两回事，但对调用方等价——都拿不到数据。 */
-    private fun split(lines: List<String>): Map<String, List<String>> {
+    internal fun split(lines: List<String>): Map<String, List<String>> {
         val sections = mutableMapOf<String, MutableList<String>>()
         var current: MutableList<String>? = null
         for (line in lines) {
@@ -394,7 +394,7 @@ object HostFacts {
      * 只取前 8 个字段（user nice system idle iowait irq softirq steal）：后面的 guest / guest_nice
      * 已经被计入 user / nice，全加一遍等于把虚拟机的时间算两次，使用率会偏低。
      */
-    private fun cpuCounters(lines: List<String>?): Map<String, LongArray> {
+    internal fun cpuCounters(lines: List<String>?): Map<String, LongArray> {
         val result = mutableMapOf<String, LongArray>()
         lines?.forEach { line ->
             if (!line.startsWith("cpu")) return@forEach
@@ -408,7 +408,7 @@ object HostFacts {
         return result
     }
 
-    private fun usageBetween(before: LongArray?, after: LongArray?): Double? {
+    internal fun usageBetween(before: LongArray?, after: LongArray?): Double? {
         if (before == null || after == null) return null
         val totalDelta = after.sum() - before.sum()
         // 两次采样完全相同（或计数器被重置）时报 0：负数和 NaN 都会直接画坏进度条
@@ -424,7 +424,7 @@ object HostFacts {
     // ---- /proc/meminfo -------------------------------------------------------
 
     /** @return 内存 to swap（没配 swap 时 swap 为 null）；null 表示连 MemTotal 都读不出来 */
-    private fun parseMemory(lines: List<String>?): Pair<MemoryUsage, MemoryUsage?>? {
+    internal fun parseMemory(lines: List<String>?): Pair<MemoryUsage, MemoryUsage?>? {
         val kb = mutableMapOf<String, Long>()
         lines?.forEach { line ->
             val colon = line.indexOf(':')
@@ -599,7 +599,7 @@ object HostFacts {
         (after - before).coerceAtLeast(0L) / intervalSeconds
 
     /** @return 网卡名 to (接收字节, 发送字节) */
-    private fun netCounters(lines: List<String>?): Map<String, Pair<Long, Long>> {
+    internal fun netCounters(lines: List<String>?): Map<String, Pair<Long, Long>> {
         val result = LinkedHashMap<String, Pair<Long, Long>>()
         lines?.forEach { line ->
             // 表头那两行没有冒号，天然被跳过
@@ -773,7 +773,7 @@ object HostFacts {
         return LoadAverage(one, five, fifteen)
     }
 
-    private fun firstDouble(lines: List<String>?): Double? =
+    internal fun firstDouble(lines: List<String>?): Double? =
         lines?.firstOrNull { it.isNotBlank() }?.trim()?.split(WHITESPACE)?.firstOrNull()?.toDoubleOrNull()
 
     private val WHITESPACE = Regex("\\s+")

@@ -87,6 +87,8 @@ data class HostForm(
             auth = auth,
             loginCommand = loginCommand.trim().ifBlank { null },
             proxyJumpId = proxyJumpId,
+            // 表单里没有这一项（开关在主页长按菜单），编辑时得原样带回去，否则一保存就被关掉
+            homeMonitor = existing?.homeMonitor == true,
         )
     }
 

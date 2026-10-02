@@ -45,6 +45,7 @@ import net.lighttools.lightmux.ui.files.FilesViewModel
 import net.lighttools.lightmux.ui.forward.ForwardScreen
 import net.lighttools.lightmux.ui.forward.ForwardSheet
 import net.lighttools.lightmux.ui.forward.ForwardViewModel
+import net.lighttools.lightmux.ui.home.HomePulseEffect
 import net.lighttools.lightmux.ui.home.HomeScreen
 import net.lighttools.lightmux.ui.home.HomeViewModel
 import net.lighttools.lightmux.ui.host.HostEditScreen
@@ -159,6 +160,7 @@ fun LightmuxRoot() {
             app.tmuxRepository,
             app.forwardManager,
             app.forwardStore,
+            app.monitorRepository,
         )
     }
     val terminalHandle = remember(sessions, screen) {
@@ -224,7 +226,12 @@ fun LightmuxRoot() {
         val swipeGuard = LocalSwipeOpenGuard.current
 
         when (screen) {
-            is Screen.Home -> HomeRoute(homeVm, nav)
+            is Screen.Home -> {
+                // 挂在这一支而不是 HomeScreen 里：抽屉装的也是 HomeScreen，在终端页上它一直组合着，
+                // 放进去就成了「人在终端里，主页的监控还在后台轮询」
+                HomePulseEffect(homeVm)
+                HomeRoute(homeVm, nav)
+            }
 
             is Screen.Terminal -> {
                 if (terminalHandle == null) {
