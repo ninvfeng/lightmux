@@ -203,6 +203,11 @@ class TerminalHostState(
         val v = view ?: return
         val imm = v.context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
         imm?.hideSoftInputFromWindow(v.windowToken, 0)
+        // 焦点也得一起交出去：带着焦点的 AndroidView 被移除时（从抽屉切会话、key(sessionId) 重建），
+        // Compose 会在 applyChanges 中途 requestFocus，焦点搜索顺带让抽屉里的 LazyColumn 子组合，
+        // 运行时状态被搞乱，下一帧布局抛 "LayoutNode should be attached to an owner" 直接闪退。
+        // 在这里（普通事件时机）清掉就不会走那条路；点一下终端 showKeyboard() 会再要回来。
+        v.clearFocus()
     }
 
     internal fun attach(v: TerminalView) {
