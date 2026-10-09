@@ -461,7 +461,7 @@ object HostFacts {
      * 伪文件系统（tmpfs / overlay / snap 的 loop 设备…）一概过滤：它们要么是内存，
      * 要么是只读镜像，占用率对用户没有任何决策价值，还会把真正的磁盘挤出屏幕。
      */
-    private fun parseDisks(lines: List<String>?): List<DiskUsage> = lines.orEmpty().mapNotNull { line ->
+    internal fun parseDisks(lines: List<String>?): List<DiskUsage> = lines.orEmpty().mapNotNull { line ->
         val parts = line.trim().split(WHITESPACE)
         if (parts.size < 6) return@mapNotNull null
         val blocks = parts[1].toLongOrNull() ?: return@mapNotNull null

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -87,6 +88,10 @@ fun OverviewScreen(
             return@Scaffold
         }
         LazyColumn(Modifier.fillMaxSize().padding(padding)) {
+            item(key = "header") {
+                OverviewHeader()
+                HorizontalDivider()
+            }
             items(hosts, key = { it.id }) { host ->
                 OverviewRow(
                     host = host,
@@ -100,64 +105,125 @@ fun OverviewScreen(
     }
 }
 
+/**
+ * 表头。各列只在这里写一次名字，行里只剩数字——一台一行要塞下四项读数，每格再带标签就放不下了。
+ */
+@Composable
+private fun OverviewHeader() {
+    OverviewLine(
+        name = { },
+        cpu = { HeaderCell(stringResource(R.string.monitor_cpu)) },
+        memory = { HeaderCell(stringResource(R.string.monitor_memory)) },
+        disk = { HeaderCell(stringResource(R.string.monitor_disk)) },
+        net = { HeaderCell(stringResource(R.string.monitor_network)) },
+        modifier = Modifier.padding(vertical = 6.dp),
+    )
+}
+
+@Composable
+private fun HeaderCell(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+    )
+}
+
 @Composable
 private fun OverviewRow(host: Host, loaded: Boolean, reading: HostPulse.Reading?, onClick: () -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = host.name,
-                modifier = Modifier.weight(1f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.titleSmall,
-            )
-            if (reading != null) {
-                Text(
-                    text = "↓${reading.rxBytesPerSecond?.let(::formatRate) ?: PLACEHOLDER}  " +
-                        "↑${reading.txBytesPerSecond?.let(::formatRate) ?: PLACEHOLDER}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        // 采集中与采不到分开说——一行「—」会被当成读数是零
-        if (reading == null) {
+    val name: @Composable () -> Unit = {
+        Text(
+            text = host.name,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+    }
+    val modifier = Modifier.clickable(onClick = onClick).padding(vertical = 10.dp)
+    // 采集中与采不到分开说——一行「—」会被当成读数是零
+    if (reading == null) {
+        Row(modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f)) { name() }
             Text(
                 text = stringResource(if (loaded) R.string.overview_unavailable else R.string.connecting),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            return@Column
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            UsageBar(stringResource(R.string.monitor_cpu), reading.cpu, Modifier.weight(1f))
-            UsageBar(stringResource(R.string.monitor_memory), reading.memory.ratio.toDouble(), Modifier.weight(1f))
-        }
+        return
+    }
+    OverviewLine(
+        name = name,
+        cpu = { UsageCell(reading.cpu) },
+        memory = { UsageCell(reading.memory.ratio.toDouble()) },
+        disk = { UsageCell(reading.disk?.ratio?.toDouble()) },
+        net = {
+            // 上下叠放：一个速率最长能到「1023.9 KiB/s」，并排就把主机名挤没了
+            Column {
+                RateText("↓${reading.rxBytesPerSecond?.let(::formatRate) ?: PLACEHOLDER}")
+                RateText("↑${reading.txBytesPerSecond?.let(::formatRate) ?: PLACEHOLDER}")
+            }
+        },
+        modifier = modifier,
+    )
+}
+
+/** 表头与数据行共用的列宽，保证上下对齐。列宽固定不随数字伸缩：每 5 秒刷一次，跟着内容挪位置整页都在抖。 */
+@Composable
+private fun OverviewLine(
+    name: @Composable () -> Unit,
+    cpu: @Composable () -> Unit,
+    memory: @Composable () -> Unit,
+    disk: @Composable () -> Unit,
+    net: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.weight(1f)) { name() }
+        Box(Modifier.width(USAGE_WIDTH)) { cpu() }
+        Box(Modifier.width(USAGE_WIDTH)) { memory() }
+        Box(Modifier.width(USAGE_WIDTH)) { disk() }
+        Box(Modifier.width(NET_WIDTH)) { net() }
     }
 }
 
-/** @param ratio null = 第一轮还算不出差值 */
+/** @param ratio null = 读数暂缺（CPU 第一轮算不出差值，或这台没有真实磁盘） */
 @Composable
-private fun UsageBar(label: String, ratio: Double?, modifier: Modifier) {
+private fun UsageCell(ratio: Double?) {
     // 只在吃满时变色：常态一片彩色反而让人看不出哪台机器出了事
     val high = (ratio ?: 0.0) >= HIGH_USAGE
     val color = if (high) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(3.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
         Text(
-            text = "$label ${ratio?.let { "${(it * 100).toInt()}%" } ?: PLACEHOLDER}",
-            style = MaterialTheme.typography.labelSmall,
-            color = if (high) color else MaterialTheme.colorScheme.onSurfaceVariant,
+            text = ratio?.let { "${(it * 100).toInt()}%" } ?: PLACEHOLDER,
+            style = MaterialTheme.typography.labelMedium,
+            color = if (high) color else MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
         )
         LinearProgressIndicator(
             progress = { (ratio ?: 0.0).toFloat() },
-            modifier = Modifier.fillMaxWidth().height(4.dp),
+            modifier = Modifier.fillMaxWidth().height(3.dp),
             color = color,
         )
     }
 }
 
+@Composable
+private fun RateText(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+    )
+}
+
+private val USAGE_WIDTH = 40.dp
+private val NET_WIDTH = 76.dp
 private const val PLACEHOLDER = "—"
 private const val HIGH_USAGE = 0.9

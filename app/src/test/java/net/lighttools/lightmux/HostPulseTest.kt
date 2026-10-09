@@ -13,6 +13,7 @@ class HostPulseTest {
         uptime: String = "1000.00 3000.00",
         stat: String = "cpu  100 0 100 800 0 0 0 0",
         net: String = "",
+        disk: String = "",
         procfs: String = "1",
         end: Boolean = true,
     ) = listOfNotNull(
@@ -27,6 +28,9 @@ class HostPulseTest {
         HostFacts.MARKER_MEM,
         "MemTotal:        1000 kB",
         "MemAvailable:     250 kB",
+        HostFacts.MARKER_DISK,
+        "Filesystem     1024-blocks      Used Available Capacity Mounted on",
+        disk,
         HostFacts.MARKER_END.takeIf { end },
     ).joinToString("\n")
 
@@ -93,5 +97,25 @@ class HostPulseTest {
         assertNull(HostPulse.parse(output(end = false)))
         assertNull(HostPulse.parse(output(stat = "garbage")))
         assertNull(HostPulse.parse(""))
+    }
+
+    @Test
+    fun diskIsTheFullestRealOne() {
+        val sample = HostPulse.parse(
+            output(
+                disk = listOf(
+                    "/dev/sda1 1000 500 500 50% /",
+                    "/dev/sdb1 1000 900 100 90% /data",
+                    "tmpfs 1000 1000 0 100% /dev/shm",
+                ).joinToString("\n")
+            )
+        )!!
+        assertEquals("/data", sample.disk!!.mountPoint)
+        assertEquals("/data", HostPulse.reading(null, sample).disk!!.mountPoint)
+    }
+
+    @Test
+    fun noDiskStillParses() {
+        assertNull(HostPulse.parse(output())!!.disk)
     }
 }

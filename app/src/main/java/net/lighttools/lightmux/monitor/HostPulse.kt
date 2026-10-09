@@ -10,7 +10,7 @@ package net.lighttools.lightmux.monitor
  */
 object HostPulse {
 
-    /** 只读四个 `/proc` 文件。`/proc/stat` 只要首行（总体那行），核数多的机器上整份能有几十行。 */
+    /** 只读四个 `/proc` 文件外加一次 `df`。`/proc/stat` 只要首行（总体那行），核数多的机器上整份能有几十行。 */
     val COMMAND: String = (
         HostFacts.PREAMBLE +
             listOf(
@@ -18,6 +18,7 @@ object HostPulse {
                 "echo ${HostFacts.MARKER_CPU1}", "head -n 1 /proc/stat 2>/dev/null",
                 "echo ${HostFacts.MARKER_NET1}", "cat /proc/net/dev 2>/dev/null",
                 "echo ${HostFacts.MARKER_MEM}", "cat /proc/meminfo 2>/dev/null",
+                "echo ${HostFacts.MARKER_DISK}", "df -P -k 2>/dev/null",
                 "echo ${HostFacts.MARKER_END}",
             )
         ).joinToString("; ")
@@ -30,12 +31,15 @@ object HostPulse {
         /** 网卡名 → (收, 发) 累计字节。只保留真实网卡，见 [parse] */
         val net: Map<String, Pair<Long, Long>>,
         val memory: MemoryUsage,
+        val disk: DiskUsage?,
     )
 
     /** 概览页上显示的读数。CPU 与网速为 null = 还只有一轮采样，算不出差值。 */
     data class Reading(
         val cpu: Double?,
         val memory: MemoryUsage,
+        /** 最满的那块盘；null = 没有真实磁盘（容器里常见）或 df 不可用 */
+        val disk: DiskUsage?,
         val rxBytesPerSecond: Double?,
         val txBytesPerSecond: Double?,
     )
@@ -51,14 +55,16 @@ object HostPulse {
         // 虚拟网卡（veth / docker0…）上的流量多半是本机容器之间转的，计进来会把同一份流量算两遍
         val net = HostFacts.netCounters(sections[HostFacts.MARKER_NET1])
             .filterKeys { !HostFacts.isVirtualInterface(it) }
-        return Sample(uptime, cpu, net, memory)
+        // 一行只放得下一块盘，挑最满的：概览要回答的是「哪台快满了」，不是「每块盘各多少」
+        val disk = HostFacts.parseDisks(sections[HostFacts.MARKER_DISK]).maxByOrNull { it.ratio }
+        return Sample(uptime, cpu, net, memory, disk)
     }
 
     fun reading(previous: Sample?, current: Sample): Reading {
         val interval = previous?.let { current.uptime - it.uptime }
         // 间隔不成立（远端重启过、或两轮挨得太近）时宁可不给速率，也不拿一个编出来的分母去除
         if (previous == null || interval == null || interval < MIN_INTERVAL_SECONDS) {
-            return Reading(cpu = null, memory = current.memory, rxBytesPerSecond = null, txBytesPerSecond = null)
+            return Reading(cpu = null, memory = current.memory, disk = current.disk, rxBytesPerSecond = null, txBytesPerSecond = null)
         }
         // 只认两轮都在的网卡：中途冒出来的卡没有基准，算进去就是把它开机以来的总量当成这几秒的流量
         var rx = 0L
@@ -71,6 +77,7 @@ object HostPulse {
         return Reading(
             cpu = HostFacts.usageBetween(previous.cpu, current.cpu),
             memory = current.memory,
+            disk = current.disk,
             rxBytesPerSecond = rx / interval,
             txBytesPerSecond = tx / interval,
         )
