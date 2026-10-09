@@ -177,9 +177,8 @@
     <string name="snapshot_days">%1$d d ago</string>
 
     <!-- 监控页。KiB/MiB、↑↓、% 是通用符号，和键帽一样不做本地化 -->
-    <string name="home_monitor_show">Show stats in list</string>
-    <string name="home_monitor_hide">Hide stats in list</string>
-    <string name="home_monitor_unavailable">Stats unavailable</string>
+    <string name="overview">Monitor overview</string>
+    <string name="overview_unavailable">Stats unavailable</string>
     <string name="monitor_system">System</string>
     <string name="monitor_distro">Distribution</string>
     <string name="monitor_kernel">Kernel</string>

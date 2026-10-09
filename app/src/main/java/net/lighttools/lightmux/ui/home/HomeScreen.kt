@@ -50,7 +50,6 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -65,13 +64,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import net.lighttools.lightmux.R
 import net.lighttools.lightmux.data.Host
-import net.lighttools.lightmux.monitor.HostPulse
-import net.lighttools.lightmux.monitor.formatRate
 import net.lighttools.lightmux.session.SessionState
 import net.lighttools.lightmux.session.TermSessionHandle
 import net.lighttools.lightmux.tmux.HostTmuxState
@@ -110,6 +104,7 @@ fun HomeScreen(
     onOpenMonitor: (hostId: String) -> Unit,
     onOpenFiles: (hostId: String) -> Unit,
     onOpenForward: (hostId: String) -> Unit,
+    onOpenOverview: () -> Unit,
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -158,6 +153,9 @@ fun HomeScreen(
                             tint = if (vm.reordering) MaterialTheme.colorScheme.primary
                             else LocalContentColor.current,
                         )
+                    }
+                    IconButton(onClick = onOpenOverview) {
+                        Icon(Icons.Default.MonitorHeart, stringResource(R.string.overview))
                     }
                     IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Default.Settings, stringResource(R.string.settings))
@@ -423,8 +421,6 @@ private fun HostNode(
      */
     val expanded by remember(vm, host.id) { derivedStateOf { host.id in vm.expandedHosts } }
     val state by remember(vm, host.id) { derivedStateOf { vm.stateOf(host.id) } }
-    val pulseLoaded by remember(vm, host.id) { derivedStateOf { host.id in vm.pulses } }
-    val pulse by remember(vm, host.id) { derivedStateOf { vm.pulses[host.id] } }
 
     Column(modifier) {
         HostRow(
@@ -438,13 +434,10 @@ private fun HostNode(
             onOpenMonitor = onOpenMonitor,
             onOpenFiles = onOpenFiles,
             onOpenForward = onOpenForward,
-            onToggleMonitor = { vm.toggleHomeMonitor(host) },
             onEdit = onEditHost,
             onDuplicate = onDuplicateHost,
             onDelete = onDeleteHost,
         )
-
-        if (host.homeMonitor) HostPulseRow(loaded = pulseLoaded, reading = pulse)
 
         if (!expanded) return@Column
 
@@ -702,7 +695,6 @@ private fun HostRow(
     onOpenMonitor: () -> Unit,
     onOpenFiles: () -> Unit,
     onOpenForward: () -> Unit,
-    onToggleMonitor: () -> Unit,
     onEdit: () -> Unit,
     onDuplicate: () -> Unit,
     onDelete: () -> Unit,
@@ -758,102 +750,12 @@ private fun HostRow(
                         // 改主机配置和删主机跟上面四个「去某个页面」不是一类，隔开一道，
                         // 免得手指顺着往下滑一格就把主机删了
                         HorizontalDivider()
-                        HostMenuItem(
-                            Icons.Default.MonitorHeart,
-                            if (host.homeMonitor) R.string.home_monitor_hide else R.string.home_monitor_show,
-                            dismiss,
-                            onToggleMonitor,
-                        )
                         HostMenuItem(Icons.Default.Edit, R.string.edit, dismiss, onEdit)
                         HostMenuItem(Icons.Default.ContentCopy, R.string.duplicate, dismiss, onDuplicate)
                         HostMenuItem(Icons.Default.Delete, R.string.delete, dismiss, onDelete)
                     }
                 }
             }
-        }
-    }
-}
-
-/**
- * 主机行下面那一行 CPU / 内存 / 网速。
- *
- * 三格按固定权重分宽，不随数字长短伸缩：每 5 秒刷一次，跟着内容挪位置的话整行一直在抖。
- * 采集中与采不到要分开说——一行「—」会被当成读数是零。
- */
-@Composable
-private fun HostPulseRow(loaded: Boolean, reading: HostPulse.Reading?) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, bottom = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        val style = MaterialTheme.typography.labelSmall
-        val dim = MaterialTheme.colorScheme.onSurfaceVariant
-        if (!loaded || reading == null) {
-            Text(
-                text = stringResource(if (loaded) R.string.home_monitor_unavailable else R.string.connecting),
-                style = style,
-                color = dim,
-            )
-            return@Row
-        }
-        val placeholder = "—"
-        PulseCell(
-            text = "${stringResource(R.string.monitor_cpu)} ${reading.cpu?.let(::percentLabel) ?: placeholder}",
-            high = (reading.cpu ?: 0.0) >= HIGH_USAGE,
-            modifier = Modifier.weight(1f),
-        )
-        PulseCell(
-            text = "${stringResource(R.string.monitor_memory)} ${percentLabel(reading.memory.ratio.toDouble())}",
-            high = reading.memory.ratio >= HIGH_USAGE,
-            modifier = Modifier.weight(1.2f),
-        )
-        PulseCell(
-            text = "↓${reading.rxBytesPerSecond?.let(::formatRate) ?: placeholder}  " +
-                "↑${reading.txBytesPerSecond?.let(::formatRate) ?: placeholder}",
-            high = false,
-            modifier = Modifier.weight(2.6f),
-        )
-    }
-}
-
-@Composable
-private fun PulseCell(text: String, high: Boolean, modifier: Modifier) {
-    Text(
-        text = text,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        style = MaterialTheme.typography.labelSmall,
-        // 只在吃满时变色：常态一片彩色反而让人看不出哪台机器出了事
-        color = if (high) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = modifier,
-    )
-}
-
-/** 主机行上不带小数：一行里挤三格，监控页那位小数在这里只是噪音。 */
-private fun percentLabel(ratio: Double): String = "${(ratio * 100).toInt()}%"
-
-private const val HIGH_USAGE = 0.9
-
-/**
- * 主页可见时轮询主机行监控，`onStop` 停、回前台再起。见 [HomeViewModel.startPulse]。
- */
-@Composable
-fun HomePulseEffect(vm: HomeViewModel) {
-    val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner, vm) {
-        val observer = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_START -> vm.startPulse()
-                Lifecycle.Event.ON_STOP -> vm.stopPulse()
-                else -> Unit
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        // 进入时生命周期多半已经是 STARTED，等不到 ON_START（同监控页）
-        vm.startPulse()
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-            vm.stopPulse()
         }
     }
 }

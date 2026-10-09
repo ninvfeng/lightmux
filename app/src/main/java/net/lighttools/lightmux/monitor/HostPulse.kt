@@ -1,12 +1,12 @@
 package net.lighttools.lightmux.monitor
 
 /**
- * 主页主机行上的 CPU / 内存 / 网速。**纯 Kotlin，零 Android 依赖**，可单测。
+ * 监控概览页上的 CPU / 内存 / 网速。**纯 Kotlin，零 Android 依赖**，可单测。
  *
- * 和监控页的 [HostFacts.PROBE_COMMAND] 不同，这里**不在命令里 `sleep 1`**：主页可能同时开着
+ * 和监控页的 [HostFacts.PROBE_COMMAND] 不同，这里**不在命令里 `sleep 1`**：概览同时轮询
  * 好几台，每轮都在主机锁上占一秒，会把 tmux 探测一起拖慢。差值改由两轮轮询之间算——
  * 上一轮的 [Sample] 留在调用方手里，这一轮拿来减。代价是开启后的第一轮只有内存，CPU 与网速
- * 要等第二轮（调用方因此把第二轮提前，见 `HomeViewModel.pulseLoop`）。
+ * 要等第二轮（调用方因此把第二轮提前，见 `OverviewViewModel.loop`）。
  */
 object HostPulse {
 
@@ -32,7 +32,7 @@ object HostPulse {
         val memory: MemoryUsage,
     )
 
-    /** 主机行上显示的读数。CPU 与网速为 null = 还只有一轮采样，算不出差值。 */
+    /** 概览页上显示的读数。CPU 与网速为 null = 还只有一轮采样，算不出差值。 */
     data class Reading(
         val cpu: Double?,
         val memory: MemoryUsage,
@@ -40,7 +40,7 @@ object HostPulse {
         val txBytesPerSecond: Double?,
     )
 
-    /** @return null = 输出看不懂，或这台机器没有 `/proc`——两者对主机行来说都只是「不可用」 */
+    /** @return null = 输出看不懂，或这台机器没有 `/proc`——两者对概览来说都只是「不可用」 */
     fun parse(stdout: String): Sample? {
         val lines = stdout.lines().map { it.trimEnd('\r') }
         if (HostFacts.preflight(lines) != null) return null

@@ -45,13 +45,14 @@ import net.lighttools.lightmux.ui.files.FilesViewModel
 import net.lighttools.lightmux.ui.forward.ForwardScreen
 import net.lighttools.lightmux.ui.forward.ForwardSheet
 import net.lighttools.lightmux.ui.forward.ForwardViewModel
-import net.lighttools.lightmux.ui.home.HomePulseEffect
 import net.lighttools.lightmux.ui.home.HomeScreen
 import net.lighttools.lightmux.ui.home.HomeViewModel
 import net.lighttools.lightmux.ui.host.HostEditScreen
 import net.lighttools.lightmux.ui.host.HostEditViewModel
 import net.lighttools.lightmux.ui.monitor.MonitorScreen
 import net.lighttools.lightmux.ui.monitor.MonitorViewModel
+import net.lighttools.lightmux.ui.monitor.OverviewScreen
+import net.lighttools.lightmux.ui.monitor.OverviewViewModel
 import net.lighttools.lightmux.ui.settings.AboutScreen
 import net.lighttools.lightmux.ui.keys.KeysScreen
 import net.lighttools.lightmux.ui.keys.KeysViewModel
@@ -160,7 +161,6 @@ fun LightmuxRoot() {
             app.tmuxRepository,
             app.forwardManager,
             app.forwardStore,
-            app.monitorRepository,
         )
     }
     val terminalHandle = remember(sessions, screen) {
@@ -226,12 +226,7 @@ fun LightmuxRoot() {
         val swipeGuard = LocalSwipeOpenGuard.current
 
         when (screen) {
-            is Screen.Home -> {
-                // 挂在这一支而不是 HomeScreen 里：抽屉装的也是 HomeScreen，在终端页上它一直组合着，
-                // 放进去就成了「人在终端里，主页的监控还在后台轮询」
-                HomePulseEffect(homeVm)
-                HomeRoute(homeVm, nav)
-            }
+            is Screen.Home -> HomeRoute(homeVm, nav)
 
             is Screen.Terminal -> {
                 if (terminalHandle == null) {
@@ -296,6 +291,15 @@ fun LightmuxRoot() {
                     MonitorViewModel(app.monitorRepository, app.hostStore, screen.hostId)
                 }
                 MonitorScreen(vm = vm, onBack = { nav.pop() })
+            }
+
+            is Screen.Overview -> {
+                val vm = rememberVm("overview") { OverviewViewModel(app.monitorRepository, app.hostStore) }
+                OverviewScreen(
+                    vm = vm,
+                    onBack = { nav.pop() },
+                    onOpenMonitor = { nav.push(Screen.Monitor(it)) },
+                )
             }
 
             is Screen.Files -> {
@@ -527,6 +531,10 @@ private fun HomeRoute(vm: HomeViewModel, nav: Navigator, onNavigate: () -> Unit 
         },
         onOpenForward = {
             nav.push(Screen.Forward(it))
+            onNavigate()
+        },
+        onOpenOverview = {
+            nav.push(Screen.Overview)
             onNavigate()
         },
         onOpenSettings = {

@@ -7,13 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -26,8 +20,6 @@ import net.lighttools.lightmux.data.ForwardStore
 import net.lighttools.lightmux.data.Host
 import net.lighttools.lightmux.data.HostStore
 import net.lighttools.lightmux.forward.ForwardManager
-import net.lighttools.lightmux.monitor.HostPulse
-import net.lighttools.lightmux.monitor.MonitorRepository
 import net.lighttools.lightmux.session.SessionManager
 import net.lighttools.lightmux.session.SessionState
 import net.lighttools.lightmux.session.TermSessionHandle
@@ -53,7 +45,6 @@ class HomeViewModel(
     private val tmux: TmuxRepository,
     private val forwards: ForwardManager,
     private val forwardStore: ForwardStore,
-    private val monitor: MonitorRepository,
 ) : ViewModel() {
 
     val hosts: StateFlow<List<Host>> =
@@ -126,7 +117,7 @@ class HomeViewModel(
         val ids = expandedHosts
         if (ids.isEmpty()) return
         expandedHosts = emptySet()
-        viewModelScope.launch { ids.filterNot(::pulsing).forEach { tmux.release(it) } }
+        viewModelScope.launch { ids.forEach { tmux.release(it) } }
     }
 
     /** 展开了窗口的 tmux 会话，键见 [sessionKey]。 */
@@ -160,18 +151,6 @@ class HomeViewModel(
     var staleNotice by mutableStateOf(false)
         private set
 
-    /**
-     * 主机 id → 主机行上的监控读数。**键不存在 = 还没采到第一轮；值为 null = 采不到**
-     * （连不上、没有 `/proc`、MFA 主机不许自动拨号），两者在行上显示不同。
-     *
-     * 离开主页即清空：抽屉里装的也是主页，留着旧读数会让人把几分钟前的 CPU 当成现在的。
-     */
-    var pulses by mutableStateOf(emptyMap<String, HostPulse.Reading?>())
-        private set
-
-    /** 页面不可见时必须为 null，理由同监控页的轮询：后台一直发 SSH 命令既费电又容易触发 fail2ban。 */
-    private var pulseJob: Job? = null
-
     /** 列表滚动位置。跟着 ViewModel 走才能在返回主页时停在原处。 */
     val listState = LazyListState()
 
@@ -196,8 +175,7 @@ class HomeViewModel(
     fun toggleExpanded(hostId: String) {
         if (hostId in expandedHosts) {
             expandedHosts = expandedHosts - hostId
-            // 监控还在用这条连接：放掉的话下一轮采样又得重新握手
-            if (!pulsing(hostId)) viewModelScope.launch { tmux.release(hostId) }
+            viewModelScope.launch { tmux.release(hostId) }
         } else {
             expandedHosts = expandedHosts + hostId
             hosts.value.firstOrNull { it.id == hostId }?.let(::probe)
@@ -208,64 +186,6 @@ class HomeViewModel(
     fun refreshExpanded() {
         hosts.value.filter { it.id in expandedHosts }.forEach(::probe)
     }
-
-    // ---- 主机行监控 -----------------------------------------------------------
-
-    /** 主页 `ON_START` 与进入页面时各叫一次，幂等。只轮询开了 [Host.homeMonitor] 的主机。 */
-    fun startPulse() {
-        if (pulseJob?.isActive == true) return
-        pulseJob = viewModelScope.launch {
-            hosts.map { list -> list.filter { it.homeMonitor } }
-                .distinctUntilChanged()
-                .collectLatest { targets ->
-                    pulses = pulses.filterKeys { id -> targets.any { it.id == id } }
-                    // 每台一条协程：一台连不上（拨号超时十几秒）不能拖住别的主机刷新
-                    coroutineScope { targets.forEach { host -> launch { pulseLoop(host) } } }
-                }
-        }
-    }
-
-    fun stopPulse() {
-        pulseJob?.cancel()
-        pulseJob = null
-        pulses = emptyMap()
-    }
-
-    fun toggleHomeMonitor(host: Host) {
-        val enabled = !host.homeMonitor
-        viewModelScope.launch {
-            hostStore.upsert(host.copy(homeMonitor = enabled))
-            // 关掉时顺手放掉为它拨的连接——树也没展开的话，留着它就只是在后台白占着
-            if (!enabled && host.id !in expandedHosts) tmux.release(host.id)
-        }
-    }
-
-    private suspend fun pulseLoop(host: Host) {
-        var previous: HostPulse.Sample? = null
-        while (true) {
-            val sample = try {
-                monitor.probePulse(host)
-            } catch (e: CancellationException) {
-                throw e // 离开主页时 cancel 正好卡在 exec 上，不能当成「采不到」写进去
-            } catch (e: Exception) {
-                null
-            }
-            pulses = pulses + (host.id to sample?.let { HostPulse.reading(previous, it) })
-            delay(
-                when {
-                    // 连不上的机器别每 5 秒拨一次号：慢且容易触发 fail2ban
-                    sample == null -> PULSE_RETRY_MS
-                    // 第一轮只有内存，CPU 与网速要靠差值——第二轮提前，别让这两格空等一个周期
-                    previous == null -> PULSE_FIRST_GAP_MS
-                    else -> PULSE_INTERVAL_MS
-                }
-            )
-            previous = sample
-        }
-    }
-
-    private fun pulsing(hostId: String): Boolean =
-        pulseJob?.isActive == true && hosts.value.any { it.id == hostId && it.homeMonitor }
 
     // ---- 快速切换抽屉 ---------------------------------------------------------
 
@@ -524,11 +444,6 @@ class HomeViewModel(
     private fun Throwable.shortMessage(): String = message?.takeIf { it.isNotBlank() } ?: javaClass.simpleName
 
     private companion object {
-        /** 同监控页的 5 秒：再快没有意义，再慢「盯着看负载降没降」就不成立 */
-        const val PULSE_INTERVAL_MS = 5_000L
-        const val PULSE_FIRST_GAP_MS = 1_000L
-        const val PULSE_RETRY_MS = 30_000L
-
         /** 会话名可以包含 `:`，所以键的分隔符得用一个名字里不可能出现的 NUL。 */
         fun sessionKey(hostId: String, name: String) = "$hostId\u0000$name"
     }

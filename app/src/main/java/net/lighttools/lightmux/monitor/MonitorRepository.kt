@@ -45,7 +45,7 @@ class MonitorRepository(private val pool: ExecPool) {
     }
 
     /**
-     * 主页主机行的轻量采样，见 [HostPulse]。
+     * 监控概览的轻量采样，见 [HostPulse]。
      *
      * @return null = 输出看不懂或没有 `/proc`
      * @throws java.io.IOException 连不上 / 超时

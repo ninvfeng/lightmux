@@ -24,6 +24,9 @@ sealed interface Screen {
     /** 主机状态快照 */
     data class Monitor(val hostId: String) : Screen
 
+    /** 所有主机的 CPU / 内存 / 网速 */
+    data object Overview : Screen
+
     /** 端口转发：把服务端的端口映射到手机本地 */
     data class Forward(val hostId: String) : Screen
 
@@ -108,6 +111,7 @@ class Navigator(initial: List<Screen> = listOf(Screen.Home)) {
                     when (screen) {
                         is Screen.Home -> "home"
                         is Screen.Settings -> "settings"
+                        is Screen.Overview -> "overview"
                         is Screen.Keys -> "keys"
                         is Screen.About -> "about"
                         is Screen.Monitor -> "monitor:${screen.hostId}"
@@ -128,6 +132,7 @@ class Navigator(initial: List<Screen> = listOf(Screen.Home)) {
                     when {
                         s == "home" -> Screen.Home
                         s == "settings" -> Screen.Settings
+                        s == "overview" -> Screen.Overview
                         s == "keys" -> Screen.Keys
                         s == "about" -> Screen.About
                         s.startsWith("monitor:") -> Screen.Monitor(s.removePrefix("monitor:"))

@@ -24,11 +24,6 @@ data class Host(
      * 也在那里，这里只是一条引用。
      */
     val proxyJumpId: String? = null,
-    /**
-     * 主页主机行上显示 CPU / 内存 / 网速。默认关：开着就意味着主页可见时一直连着这台机器，
-     * 这是「绝不自动探测」（PRD §4.3）的一个例外，只能由用户逐台点头。
-     */
-    val homeMonitor: Boolean = false,
 ) {
     /** 供 known_hosts 与 UI 展示用的 `user@host:port`。 */
     val endpoint: String get() = "$username@$hostname:$port"

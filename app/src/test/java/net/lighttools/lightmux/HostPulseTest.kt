@@ -6,7 +6,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
-/** 主页主机行监控的解析与差值。`/proc` 片段同 [HostFactsTest]，一律写死。 */
+/** 监控概览的解析与差值。`/proc` 片段同 [HostFactsTest]，一律写死。 */
 class HostPulseTest {
 
     private fun output(
