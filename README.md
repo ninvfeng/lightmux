@@ -17,11 +17,18 @@ lightmux 把这几步省了：**打开 app，主页就是你所有服务器上�
 
 ## 截图
 
-| 主页：主机 → 会话 → 窗口 | 终端 + 快捷栏 | 侧滑切会话 |
-|:---:|:---:|:---:|
-| ![主页](./docs/images/zh/home.webp) | ![终端](./docs/images/zh/term.webp) | ![侧滑](./docs/images/zh/drawer.webp) |
-| **主机监控** | **文件管理** | **端口转发 + 内置浏览** |
-| ![监控](./docs/images/zh/monitor.webp) | ![文件](./docs/images/zh/files.webp) | ![浏览](./docs/images/zh/web.webp) |
+<table>
+  <tr>
+    <td align="center" width="33%"><b>主页：主机 → 会话 → 窗口</b><br><img src="./docs/images/zh/home.webp" width="240" alt="主页：主机 → 会话 → 窗口"></td>
+    <td align="center" width="33%"><b>终端 + 快捷栏</b><br><img src="./docs/images/zh/term.webp" width="240" alt="终端 + 快捷栏"></td>
+    <td align="center" width="33%"><b>侧滑切会话</b><br><img src="./docs/images/zh/drawer.webp" width="240" alt="侧滑切会话"></td>
+  </tr>
+  <tr>
+    <td align="center" width="33%"><b>主机监控</b><br><img src="./docs/images/zh/monitor.webp" width="240" alt="主机监控"></td>
+    <td align="center" width="33%"><b>文件管理</b><br><img src="./docs/images/zh/files.webp" width="240" alt="文件管理"></td>
+    <td align="center" width="33%"><b>端口转发 + 内置浏览</b><br><img src="./docs/images/zh/web.webp" width="240" alt="端口转发 + 内置浏览"></td>
+  </tr>
+</table>
 
 ## 功能
 

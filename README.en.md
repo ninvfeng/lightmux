@@ -18,11 +18,18 @@ to jump to another session.
 
 ## Screenshots
 
-| Home: host → session → window | Terminal + quick bar | Swipe to switch |
-|:---:|:---:|:---:|
-| ![Home](./docs/images/en/home.webp) | ![Terminal](./docs/images/en/term.webp) | ![Drawer](./docs/images/en/drawer.webp) |
-| **Host monitor** | **Files** | **Port forwarding + built-in browser** |
-| ![Monitor](./docs/images/en/monitor.webp) | ![Files](./docs/images/en/files.webp) | ![Browser](./docs/images/en/web.webp) |
+<table>
+  <tr>
+    <td align="center" width="33%"><b>Home: host → session → window</b><br><img src="./docs/images/en/home.webp" width="240" alt="Home: host → session → window"></td>
+    <td align="center" width="33%"><b>Terminal + quick bar</b><br><img src="./docs/images/en/term.webp" width="240" alt="Terminal + quick bar"></td>
+    <td align="center" width="33%"><b>Swipe to switch</b><br><img src="./docs/images/en/drawer.webp" width="240" alt="Swipe to switch"></td>
+  </tr>
+  <tr>
+    <td align="center" width="33%"><b>Host monitor</b><br><img src="./docs/images/en/monitor.webp" width="240" alt="Host monitor"></td>
+    <td align="center" width="33%"><b>Files</b><br><img src="./docs/images/en/files.webp" width="240" alt="Files"></td>
+    <td align="center" width="33%"><b>Port forwarding + built-in browser</b><br><img src="./docs/images/en/web.webp" width="240" alt="Port forwarding + built-in browser"></td>
+  </tr>
+</table>
 
 ## Features
 
