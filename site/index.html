@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>lightmux · 为 tmux 而生的 Android SSH 客户端</title>
+<meta name="description" content="主页就是你所有服务器上的 tmux 会话和窗口，点一下直接进去。安装包 3.8MB，MIT 开源，无广告无统计。">
+<meta property="og:title" content="lightmux · 为 tmux 而生的 Android SSH 客户端">
+<meta property="og:description" content="主页就是 tmux 会话列表，一点直达。安装包 3.8MB，MIT 开源。">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://lightmux.lighttools.net">
+<meta property="og:image" content="https://lightmux.lighttools.net/images/hero-zh.webp">
+<meta name="theme-color" content="#ffffff">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='26 26 56 56'%3E%3Crect x='26' y='26' width='56' height='56' rx='12' fill='%23101418'/%3E%3Crect x='49' y='31' width='28' height='28' rx='3' fill='%234EC9B0' fill-opacity='.28'/%3E%3Crect x='31' y='31' width='14' height='46' rx='3' fill='%234EC9B0'/%3E%3Crect x='49' y='63' width='28' height='14' rx='3' fill='%234EC9B0'/%3E%3C/svg%3E">
+<style>
+:root{
+  /* 底色 */
+  --bg:#FFFFFF;
+  --bg-alt:#F5F5F7;
+  --bg-foot:#F7F8FA;
+  --nav-bg:rgba(247,250,249,.76);
+  --ink-panel:#0B0D0F;
+  --ink-stage:#101418;
+  --ink-deep:#17181A;
+
+  /* 文字 */
+  --text:#17181A;
+  --text-2:#2A2B2E;
+  --text-3:#A4A4A4;
+  --text-inv-2:#9A9C9F;
+  --mock-fg:#E7E8EA;
+  --mock-fg-2:#7A7D82;
+
+  /* 线条 */
+  --line:#E4E7F3;
+  --line-soft:rgba(228,231,243,.8);
+  --line-dash:#D9DBE0;
+  --line-dark:rgba(255,255,255,.10);
+
+  /* 品牌色：logo 是 #4EC9B0，白底上做文字太浅，正文强调用压暗的一档 */
+  --logo:#4EC9B0;
+  --brand:#0F9C80;
+  --brand-soft:rgba(78,201,176,.14);
+  --brand-glow:rgba(78,201,176,.16);
+
+  /* 几何 */
+  --r-card:clamp(28px,2.8vw,40px);
+  --r-panel:clamp(16px,1.6vw,20px);
+  --r-btn:13px;
+  --container:1072px;
+  --container-wide:1392px;
+  --pad-sec:clamp(72px,7.2vw,104px);
+  --pad-card:clamp(24px,2.2vw,32px);
+
+  --font:"PingFang SC","HarmonyOS Sans SC",-apple-system,BlinkMacSystemFont,
+         "Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --mono:ui-monospace,"SF Mono","JetBrains Mono","Cascadia Code",Consolas,Menlo,monospace;
+}
+
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth;scrollbar-width:none}
+html::-webkit-scrollbar{display:none}
+body{font-family:var(--font);background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+::selection{background:var(--logo);color:#0B0D0F}
+a{color:inherit;text-decoration:none}
+img{display:block;max-width:100%}
+code,kbd,.mono{font-family:var(--mono)}
+.wrap{max-width:var(--container);margin:0 auto;padding:0 24px}
+.wrap-wide{max-width:var(--container-wide);margin:0 auto;padding:0 24px}
+section{padding:var(--pad-sec) 0}
+section[id]{scroll-margin-top:86px}
+.section-alt{background:var(--bg-alt)}
+
+/* ---------- typography ---------- */
+.eyebrow{font-size:20px;font-weight:600;color:var(--text-3);margin-bottom:14px}
+h2{font-size:clamp(30px,4.4vw,48px);font-weight:700;letter-spacing:-1.5px;line-height:1.22;text-wrap:balance;color:var(--ink-deep)}
+.lede{margin-top:16px;font-size:16px;line-height:1.8;color:var(--text-2);max-width:34em;text-wrap:pretty}
+.lede code{background:var(--bg-alt);padding:2px 7px;border-radius:6px;color:var(--ink-deep);font-size:14.5px}
+.section-alt .lede code{background:#fff}
+h1{font-size:clamp(36px,6.2vw,88px);font-weight:900;line-height:1.16;letter-spacing:-1px;color:var(--ink-deep)}
+h1 em{font-style:normal;color:var(--brand)}
+
+/* ---------- buttons ---------- */
+.btn{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;height:46px;padding:0 22px;
+  border-radius:var(--r-btn);font-size:15px;font-weight:600;transition:transform .15s,background .2s,border-color .2s}
+.btn svg{width:18px;height:18px;flex:none}
+.btn-dark{background:var(--ink-deep);color:#fff}
+.btn-dark:hover{background:#000;transform:translateY(-1px)}
+.btn-line{background:#fff;color:var(--ink-deep);border:1px solid var(--line)}
+.btn-line:hover{border-color:#C9CDD8}
+.btn-inv{background:#fff;color:var(--ink-deep)}
+.btn-inv:hover{transform:translateY(-1px)}
+.btn-inv-line{color:#fff;border:1px solid rgba(255,255,255,.22)}
+.btn-inv-line:hover{border-color:rgba(255,255,255,.42)}
+.btn-sm{height:38px;padding:0 18px;font-size:13.5px}
+.btn small{font-weight:500;opacity:.6;font-size:13px}
+.ctas{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+
+/* ---------- logo ---------- */
+.mark{width:26px;height:26px;flex:none}
+.logo{display:flex;align-items:center;gap:9px;font-weight:700;font-size:17px;color:var(--ink-deep);letter-spacing:-.2px}
+
+/* ---------- nav ---------- */
+nav{position:sticky;top:0;z-index:50;height:66px;background:var(--nav-bg);
+  backdrop-filter:saturate(1.8) blur(16px);-webkit-backdrop-filter:saturate(1.8) blur(16px);
+  border-bottom:1px solid var(--line-soft)}
+.nav-inner{height:100%;display:flex;align-items:center;justify-content:space-between;gap:24px}
+.nav-links{display:flex;align-items:center;gap:28px;font-size:14px;color:var(--text-2);flex:1;justify-content:center}
+.nav-links a:hover{color:var(--ink-deep)}
+.nav-right{display:flex;align-items:center;gap:10px}
+.lang{height:38px;padding:0 12px;border:1px solid var(--line);border-radius:10px;background:#fff;
+  font:inherit;font-size:13px;color:var(--text-2);cursor:pointer}
+.lang:hover{border-color:#C9CDD8}
+@media(max-width:760px){.nav-links{display:none}}
+
+/* ---------- hero ---------- */
+.hero{position:relative;padding:calc(clamp(40px,6vw,88px)) 0 0;overflow:hidden}
+.hero-top{position:relative;z-index:1;max-width:900px;margin:0 auto;text-align:center}
+.hero-top .lede{margin-left:auto;margin-right:auto}
+.hero-top .ctas{justify-content:center;margin-top:32px}
+.hero-meta{margin-top:20px;font-size:13.5px;color:var(--text-3)}
+.hero-stage-wrap{position:relative;z-index:1;margin-top:56px}
+.hero-stage{position:relative;background:var(--ink-stage);border-radius:28px;overflow:hidden;
+  height:clamp(420px,46vw,640px);
+  box-shadow:0 60px 110px -50px rgba(15,20,25,.45)}
+/* 青绿体积光：和宣传图同一套语言，深底才压得住手机截图本身的深色 UI */
+.hero-stage::before{content:"";position:absolute;inset:0;
+  background:
+    radial-gradient(60% 70% at 50% 100%, rgba(78,201,176,.30), transparent 70%),
+    radial-gradient(40% 50% at 15% 10%, rgba(78,201,176,.10), transparent 70%),
+    linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px) 0 0/48px 48px,
+    linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px) 0 0/48px 48px}
+.phones{position:absolute;left:0;right:0;top:clamp(36px,4.4vw,64px);display:flex;justify-content:center;align-items:flex-start;gap:clamp(16px,3vw,44px)}
+.phone{width:clamp(180px,19vw,280px);aspect-ratio:720/1600;flex:none;border-radius:clamp(26px,2.6vw,38px);
+  padding:clamp(6px,.6vw,9px);background:linear-gradient(160deg,#2b3135,#0d1013 40%,#1c2226);
+  box-shadow:0 0 0 1px rgba(255,255,255,.08) inset,0 40px 80px -30px rgba(0,0,0,.8),0 0 60px -20px rgba(78,201,176,.25)}
+.phone img{width:100%;height:100%;object-fit:cover;object-position:top;border-radius:clamp(20px,2vw,30px);background:#000}
+.phone.side{margin-top:clamp(40px,5vw,72px);opacity:.92}
+@media(max-width:760px){.phone.side{display:none}.phone{width:min(240px,64vw)}.hero-stage{height:min(560px,128vw)}}
+
+/* ---------- VS 对比区 ---------- */
+.vs-grid{display:grid;grid-template-columns:1fr 56px 1fr;gap:24px;align-items:center;margin-top:44px}
+.vs-grid>*{min-width:0}
+.vs-badge{width:56px;height:56px;border-radius:50%;background:var(--ink-deep);color:#fff;
+  display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;
+  box-shadow:0 14px 28px -12px rgba(0,0,0,.35)}
+.vs-card{border-radius:var(--r-card);padding:var(--pad-card);display:flex;flex-direction:column;gap:18px;height:100%}
+.vs-before{background:var(--bg-alt)}
+.vs-after{background:var(--ink-panel)}
+.term{background:var(--ink-stage);border-radius:var(--r-panel);padding:18px 20px;font-family:var(--mono);
+  font-size:12.5px;line-height:1.85;color:var(--mock-fg-2);overflow-x:auto;white-space:pre}
+.term b{color:var(--mock-fg);font-weight:500}
+.term .p{color:var(--logo)}
+.term .dim{opacity:.6}
+.fail-tags{list-style:none;display:flex;flex-wrap:wrap;gap:8px}
+.fail-tags li{position:relative;padding:5px 12px 5px 24px;border-radius:999px;background:#fff;
+  border:1px solid var(--line);font-size:12px;color:var(--text-2)}
+.fail-tags li::before{content:"✕";position:absolute;left:10px;top:50%;transform:translateY(-50%);
+  color:#c13b42;font-size:10px;font-weight:700}
+.tree{background:var(--ink-stage);border-radius:var(--r-panel);padding:10px 0;font-size:13.5px;color:var(--mock-fg)}
+.tree-row{display:flex;align-items:center;gap:10px;padding:9px 20px}
+.tree-row .sub{font-size:11.5px;color:var(--mock-fg-2)}
+.tree-row .x{margin-left:auto;color:var(--mock-fg-2);font-size:12px}
+.tree-row.l1{padding-left:40px}
+.tree-row.l2{padding-left:64px}
+.tree-row.hit{background:var(--brand-soft);box-shadow:inset 3px 0 0 var(--logo)}
+.ico{width:14px;height:14px;flex:none;border-radius:3px;background:var(--mock-fg-2);opacity:.6}
+.ico.win{background:none;border:1.5px solid var(--mock-fg-2);border-radius:3px}
+.live{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--logo)}
+.live::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--logo)}
+.tap{margin-left:auto;padding:3px 10px;border-radius:999px;background:var(--logo);color:#0B0D0F;font-size:11px;font-weight:700}
+.vs-good{color:var(--logo);font-weight:600;font-size:14px}
+@media(max-width:760px){
+  .vs-grid{grid-template-columns:1fr;gap:20px}
+  .vs-badge{width:auto;height:auto;border-radius:0;background:none;color:var(--text-3);
+    box-shadow:none;font-size:13px;font-weight:700;letter-spacing:3px}
+}
+
+/* ---------- 数字条 ---------- */
+.stats-section{padding:72px 0}
+.stats-label{display:flex;align-items:center;gap:16px;justify-content:center;
+  font-size:14px;font-weight:600;color:var(--text-3);letter-spacing:.5px}
+.stats-label span{flex:1;max-width:120px;border-top:1px dashed var(--line-dash)}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:28px 12px;margin-top:36px;text-align:center}
+.stat b{display:block;font-size:clamp(34px,4.2vw,52px);font-weight:800;letter-spacing:-1.5px;color:var(--ink-deep)}
+.stat span{display:block;margin-top:6px;font-size:13.5px;color:var(--text-3)}
+.stats-note{margin-top:36px;text-align:center;font-size:13px;color:var(--text-3)}
+@media(max-width:760px){.stats{grid-template-columns:repeat(2,1fr)}}
+
+/* ---------- bento ---------- */
+.bento{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:44px}
+.cell{background:var(--bg-alt);border-radius:var(--r-card);padding:var(--pad-card) var(--pad-card) 0;
+  display:flex;flex-direction:column;gap:12px;overflow:hidden}
+.section-alt .cell{background:#fff}
+.cell h3{font-size:17px;font-weight:700;color:var(--ink-deep)}
+.cell p{font-size:14px;line-height:1.7;color:var(--text-2)}
+.cell p code{background:var(--bg-alt);padding:1px 6px;border-radius:5px;font-size:12.5px;color:var(--ink-deep)}
+/* 截图只露上半截：手机 UI 的信息都在上面，整张放进格子里字会小到看不清 */
+.shot{margin:10px auto 0;width:min(100%,280px);height:340px;border-radius:30px 30px 0 0;padding:8px 8px 0;
+  background:linear-gradient(160deg,#2b3135,#0d1013 40%,#1c2226);overflow:hidden}
+.shot img{width:100%;border-radius:23px 23px 0 0}
+/* 快捷栏在屏幕最底下：改成贴底对齐，溢出的上半截被裁掉 */
+.shot.end{display:flex;flex-direction:column;justify-content:flex-end}
+.shot.end img{flex:none;border-radius:0}
+@media(max-width:960px){.bento{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:620px){.bento{grid-template-columns:1fr}}
+
+/* ---------- 还有一些小事 ---------- */
+.misc-list{list-style:none;margin-top:44px;display:grid;grid-template-columns:1fr 1fr;gap:0 56px}
+.misc-list li{position:relative;padding:18px 0 18px 22px;border-top:1px solid var(--line);
+  font-size:15px;line-height:1.7;color:var(--text-2)}
+.misc-list li:nth-last-child(-n+2){border-bottom:1px solid var(--line)}
+.misc-list li::before{content:"";position:absolute;left:0;top:27px;width:6px;height:6px;border-radius:50%;background:var(--logo)}
+.misc-list li b{color:var(--ink-deep);font-weight:600;margin-right:4px}
+@media(max-width:760px){
+  .misc-list{grid-template-columns:1fr}
+  .misc-list li:nth-last-child(-n+2){border-bottom:none}
+  .misc-list li:last-child{border-bottom:1px solid var(--line)}
+}
+
+/* ---------- 深色 CTA 通栏 ---------- */
+.cta-panel{position:relative;overflow:hidden;background:var(--ink-panel);border-radius:var(--r-card);
+  padding:clamp(56px,8vw,104px) 24px;text-align:center;color:#fff}
+.cta-panel::before{content:"";position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(50% 80% at 50% 120%, rgba(78,201,176,.28), transparent 70%)}
+.cta-panel>*{position:relative}
+.cta-panel .mark{width:56px;height:56px;margin:0 auto 28px}
+.cta-panel h2{color:#fff}
+.cta-panel p{margin-top:16px;font-size:16px;color:var(--text-inv-2)}
+.cta-panel .ctas{justify-content:center;margin-top:32px}
+
+/* ---------- footer ---------- */
+footer{background:var(--bg-foot);padding:40px 0}
+.footer-top{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px}
+.footer-links{display:flex;gap:24px;font-size:14px;color:var(--text-2)}
+.footer-links a:hover{color:var(--ink-deep)}
+.footer-copy{margin-top:24px;font-size:12.5px;color:var(--text-3)}
+
+/* ---------- motion ---------- */
+.rv.pre{opacity:0;transform:translateY(22px)}
+.rv{transition:opacity .7s cubic-bezier(.16,1,.3,1),transform .7s cubic-bezier(.16,1,.3,1)}
+@keyframes rise{from{opacity:0;transform:translateY(26px)}}
+@media (prefers-reduced-motion: no-preference) {
+  .hero-top h1, .hero-top .lede, .hero-top .ctas { animation: rise .8s cubic-bezier(.16,1,.3,1) backwards; }
+  .hero-top .lede { animation-delay: .08s; }
+  .hero-top .ctas { animation-delay: .16s; }
+  .hero-stage-wrap { animation: rise .9s cubic-bezier(.16,1,.3,1) .12s backwards; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rv.pre { opacity: 1; transform: none; transition: none; }
+  html { scroll-behavior: auto; }
+}
+</style>
+</head>
+<body>
+
+<!-- logo 与 app 图标同一组几何（ic_launcher_foreground.xml 的 31..77 主体），只换成 SVG -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="mark" viewBox="26 26 56 56">
+    <rect x="26" y="26" width="56" height="56" rx="12" fill="#101418"/>
+    <rect x="49" y="31" width="28" height="28" rx="3" fill="#4EC9B0" fill-opacity=".28"/>
+    <rect x="31" y="31" width="14" height="46" rx="3" fill="#4EC9B0"/>
+    <rect x="49" y="63" width="28" height="14" rx="3" fill="#4EC9B0"/>
+  </symbol>
+  <symbol id="i-dl" viewBox="0 0 24 24"><path d="M12 3v12m0 0l-5-5m5 5l5-5M4 19h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-gh" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.03 1.76 2.69 1.25 3.35.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.8 1.19 1.83 1.19 3.09 0 4.42-2.7 5.39-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5z"/></symbol>
+</svg>
+
+<nav>
+  <div class="wrap nav-inner">
+    <a class="logo" href="/"><svg class="mark"><use href="#mark"/></svg>lightmux</a>
+    <div class="nav-links">
+      <a href="#why" data-i18n="nav.why">为什么</a>
+      <a href="#features" data-i18n="nav.features">功能</a>
+      <a href="https://github.com/ninvfeng/lightmux" target="_blank" rel="noopener">GitHub</a>
+    </div>
+    <div class="nav-right">
+      <button class="lang" type="button" data-lang-toggle>EN</button>
+      <a class="btn btn-dark btn-sm" href="#download" data-i18n="nav.download">下载</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap hero-top rv">
+    <p class="eyebrow" data-i18n="hero.eyebrow">为 tmux 而生的 Android SSH 客户端</p>
+    <h1 data-i18n="hero.title">打开 app，<br>就在 <em>tmux</em> 里</h1>
+    <p class="lede" data-i18n="hero.lede">主页就是你所有服务器上的 tmux 会话和窗口，点一下直接进去。不用再敲 <code>tmux ls</code>、<code>tmux a -t</code>，也不用记会话叫什么。</p>
+    <div class="ctas">
+      <a class="btn btn-dark" data-apk href="https://cnb.cool/ninvfeng/lighttools/lightmux/-/releases"><svg><use href="#i-dl"/></svg><span data-i18n="cta.download">下载 APK</span> <small data-ver></small></a>
+      <a class="btn btn-line" href="https://github.com/ninvfeng/lightmux" target="_blank" rel="noopener"><svg><use href="#i-gh"/></svg><span data-i18n="cta.source">查看源码</span></a>
+    </div>
+    <p class="hero-meta" data-i18n="hero.meta">Android 7.0+ · 安装包 3.8MB · MIT 开源 · 无广告无统计</p>
+  </div>
+
+  <div class="wrap-wide hero-stage-wrap rv">
+    <div class="hero-stage">
+      <div class="phones">
+        <div class="phone side"><img data-shot="term" src="images/zh/term.webp" alt="终端" data-i18n-alt="alt.term"></div>
+        <div class="phone"><img data-shot="home" src="images/zh/home.webp" alt="主页会话树" data-i18n-alt="alt.home"></div>
+        <div class="phone side"><img data-shot="monitor" src="images/zh/monitor.webp" alt="主机监控" data-i18n-alt="alt.monitor"></div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section id="why">
+  <div class="wrap rv">
+    <p class="eyebrow" data-i18n="why.eyebrow">同一件事</p>
+    <h2 data-i18n="why.title">回到昨晚那个窗口，两种走法</h2>
+    <p class="lede" data-i18n="why.lede">别的 SSH 客户端把 tmux 当成终端里的一个功能：先连上，再敲命令，再找窗口。lightmux 把层级倒了过来——会话就是你要去的地方，终端只是结果。</p>
+    <div class="vs-grid">
+      <div class="vs-card vs-before">
+<div class="term"><span class="p">$</span> <b>ssh dev@web-prod</b>
+<span class="p">$</span> <b>tmux ls</b>
+api: 3 windows (created Fri Oct 10)
+deploy: 1 windows
+monitor: 1 windows
+<span class="p">$</span> <b>tmux a -t api</b>
+<span class="dim" data-i18n="why.cmt"># Ctrl-b w ……是哪个窗口来着</span></div>
+        <ul class="fail-tags">
+          <li data-i18n="why.f1">先连上</li><li data-i18n="why.f2">记会话名</li><li data-i18n="why.f3">敲命令</li><li data-i18n="why.f4">再找窗口</li>
+        </ul>
+      </div>
+      <span class="vs-badge">VS</span>
+      <div class="vs-card vs-after">
+        <div class="tree">
+          <div class="tree-row"><span class="ico"></span>web-prod <span class="sub">dev@10.20.0.11</span></div>
+          <div class="tree-row l1"><span class="ico"></span>api <span class="sub" data-i18n="why.wins">3 窗口</span></div>
+          <div class="tree-row l2"><span class="ico win"></span>0: server<span class="x">✕</span></div>
+          <div class="tree-row l2"><span class="ico win"></span>1: logs<span class="x">✕</span></div>
+          <div class="tree-row l2 hit"><span class="ico win"></span>2: shell <span class="live" data-i18n="why.active">活动</span><span class="tap" data-i18n="why.tap">点一下</span></div>
+          <div class="tree-row l1"><span class="ico"></span>deploy <span class="sub" data-i18n="why.win1">1 窗口</span></div>
+        </div>
+        <p class="vs-good" data-i18n="why.good">已展开时，一次点击就在里面了</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section-alt stats-section">
+  <div class="wrap rv">
+    <div class="stats-label"><span></span><em style="font-style:normal" data-i18n="stats.label">小，而且干净</em><span></span></div>
+    <div class="stats">
+      <div class="stat"><b>3.8<small style="font-size:.5em">MB</small></b><span data-i18n="stats.size">整个安装包</span></div>
+      <div class="stat"><b>0</b><span data-i18n="stats.ads">广告、账号、统计 SDK</span></div>
+      <div class="stat"><b>MIT</b><span data-i18n="stats.license">开源许可</span></div>
+      <div class="stat"><b>7.0+</b><span data-i18n="stats.android">Android 版本</span></div>
+    </div>
+    <p class="stats-note" data-i18n="stats.note">除了连你自己的服务器，手机只在你手动检查更新时访问一次 CNB。</p>
+  </div>
+</section>
+
+<section id="features">
+  <div class="wrap rv">
+    <p class="eyebrow" data-i18n="feat.eyebrow">功能</p>
+    <h2 data-i18n="feat.title">tmux 之外，够用的都在</h2>
+    <div class="bento">
+      <div class="cell">
+        <h3 data-i18n="feat.home.t">主页就是会话树</h3>
+        <p data-i18n="feat.home.d">主机 → tmux 会话 → 窗口，展开就看到。新建、重命名、结束都在这里，不用敲命令。</p>
+        <div class="shot"><img data-shot="home" src="images/zh/home.webp" alt="" loading="lazy"></div>
+      </div>
+      <div class="cell">
+        <h3 data-i18n="feat.drawer.t">侧滑切会话</h3>
+        <p data-i18n="feat.drawer.d">终端里从左边缘一划，拉出来的就是主页那棵树。切窗口终端原地换，不重连，滚屏不丢。</p>
+        <div class="shot"><img data-shot="drawer" src="images/zh/drawer.webp" alt="" loading="lazy"></div>
+      </div>
+      <div class="cell">
+        <h3 data-i18n="feat.term.t">顺手的快捷栏</h3>
+        <p data-i18n="feat.term.d"><code>Ctrl</code> <code>Esc</code> <code>Tab</code> 方向键都在，可增删排序；<code>Ctrl+B d</code> 这样的组合也能做成一个按钮。</p>
+        <div class="shot end"><img data-shot="term" src="images/zh/term.webp" alt="" loading="lazy"></div>
+      </div>
+      <div class="cell">
+        <h3 data-i18n="feat.monitor.t">主机监控</h3>
+        <p data-i18n="feat.monitor.d">CPU、内存、磁盘、网速、进程、容器，一眼看清哪台机器在忙。采不到的如实标「不可用」，不拿 0 充数。</p>
+        <div class="shot"><img data-shot="monitor" src="images/zh/monitor.webp" alt="" loading="lazy"></div>
+      </div>
+      <div class="cell">
+        <h3 data-i18n="feat.files.t">文件管理</h3>
+        <p data-i18n="feat.files.d">浏览、上传、下载、重命名、删除，小文本文件直接在手机上改。复用同一条 SSH 连接。</p>
+        <div class="shot"><img data-shot="files" src="images/zh/files.webp" alt="" loading="lazy"></div>
+      </div>
+      <div class="cell">
+        <h3 data-i18n="feat.web.t">端口转发 + 内置浏览</h3>
+        <p data-i18n="feat.web.d">终端里一出现 <code>http://localhost:5173</code>，底部就浮出「转发它」。在 app 里打开，切回终端看日志也不断。</p>
+        <div class="shot"><img data-shot="web" src="images/zh/web.webp" alt="" loading="lazy"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section-alt">
+  <div class="wrap rv">
+    <h2 data-i18n="misc.title">还有一些小事</h2>
+    <ul class="misc-list">
+      <li data-i18n="misc.1"><b>断线自动重连</b>网络一恢复就重试，回到原来那个 tmux 会话，滚屏还在</li>
+      <li data-i18n="misc.2"><b>不和电脑抢屏</b>电脑上也 attach 着时，手机切窗口不会把那块屏一起切走</li>
+      <li data-i18n="misc.3"><b>跳板机</b>ProxyJump 多跳，只能从堡垒机进的内网机器照样连</li>
+      <li data-i18n="misc.4"><b>密钥统一管理</b>私钥导入一次，多台主机共用</li>
+      <li data-i18n="misc.5"><b>凭据加密</b>密码和私钥经系统密钥库加密，不落明文</li>
+      <li data-i18n="misc.6"><b>主机指纹</b>首次连接记住，被调包时拦下来</li>
+      <li data-i18n="misc.7"><b>转发只绑本机</b>连咖啡店 Wi-Fi 也不会把内网服务暴露给同网段</li>
+      <li data-i18n="misc.8"><b>其他</b>登录后自动执行命令、深浅主题、终端配色、中英双语、应用内检查更新</li>
+    </ul>
+  </div>
+</section>
+
+<section id="download">
+  <div class="wrap-wide">
+    <div class="cta-panel rv">
+      <svg class="mark"><use href="#mark"/></svg>
+      <h2 data-i18n="end.title">下次连服务器，直接进 tmux</h2>
+      <p data-i18n="end.lede">免费、开源，需要 Android 7.0 及以上。还没上应用商店，安装时允许一次「未知来源」即可。</p>
+      <div class="ctas">
+        <a class="btn btn-inv" data-apk href="https://cnb.cool/ninvfeng/lighttools/lightmux/-/releases"><svg><use href="#i-dl"/></svg><span data-i18n="cta.download">下载 APK</span> <small data-ver></small></a>
+        <a class="btn btn-inv-line" href="https://cnb.cool/ninvfeng/lighttools/lightmux/-/releases" target="_blank" rel="noopener" data-i18n="cta.all">全部版本</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="footer-top">
+      <a class="logo" href="/"><svg class="mark"><use href="#mark"/></svg>lightmux</a>
+      <div class="footer-links">
+        <a href="https://github.com/ninvfeng/lightmux" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://cnb.cool/ninvfeng/lighttools/lightmux" target="_blank" rel="noopener">CNB</a>
+        <a href="https://github.com/ninvfeng/lightmux/blob/main/CHANGELOG.md" target="_blank" rel="noopener" data-i18n="foot.changelog">更新日志</a>
+      </div>
+    </div>
+    <p class="footer-copy">© 2026 lightmux · MIT · lighttools.net</p>
+  </div>
+</footer>
+
+<script>
+(function () {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const io = new IntersectionObserver(entries => {
+    entries.forEach(e => { if (e.isIntersecting) { e.target.classList.remove("pre"); io.unobserve(e.target); } });
+  }, { threshold: 0.15 });
+  document.querySelectorAll(".rv").forEach(el => {
+    const r = el.getBoundingClientRect();
+    if (r.top > innerHeight) { el.classList.add("pre"); io.observe(el); }
+  });
+})();
+</script>
+
+<script>
+// 中英双语：中文写在 HTML 里（不跑 JS 也能看），英文在这里覆盖。
+// 默认跟浏览器语言走，手动切过就记住——和 app 本身「跟随系统、可在设置里改」一致
+(function () {
+  const EN = {
+    "nav.why": "Why", "nav.features": "Features", "nav.download": "Download",
+    "hero.eyebrow": "The Android SSH client built for tmux",
+    "hero.title": "Open the app,<br>you're in <em>tmux</em>",
+    "hero.lede": "The home screen lists the tmux sessions and windows on all your servers. Tap one and you are in — no more <code>tmux ls</code>, no <code>tmux a -t</code>, no remembering session names.",
+    "hero.meta": "Android 7.0+ · 3.8 MB · MIT · No ads, no tracking",
+    "cta.download": "Download APK", "cta.source": "Source code", "cta.all": "All releases",
+    "alt.term": "Terminal", "alt.home": "Home session tree", "alt.monitor": "Host monitor",
+    "why.eyebrow": "Same task", "why.title": "Back to last night's window, two ways",
+    "why.lede": "Other SSH clients treat tmux as a feature inside the terminal: connect, type commands, then hunt for the window. lightmux flips it — the session is where you're going, the terminal is just what you get.",
+    "why.f1": "Connect first", "why.f2": "Remember names", "why.f3": "Type commands", "why.f4": "Hunt for window",
+    "why.cmt": "# Ctrl-b w … which window was it again",
+    "why.wins": "3 windows", "why.win1": "1 window", "why.active": "active", "why.tap": "Tap",
+    "why.good": "Once expanded, one tap and you're in",
+    "stats.label": "Small, and clean", "stats.size": "The whole app", "stats.ads": "Ads, accounts, analytics SDKs",
+    "stats.license": "Open source", "stats.android": "Android",
+    "stats.note": "Apart from your own servers, the phone only talks to CNB once — when you tap to check for updates.",
+    "feat.eyebrow": "Features", "feat.title": "Beyond tmux, everything you need",
+    "feat.home.t": "Home is the session tree",
+    "feat.home.d": "Host → tmux session → window, visible as soon as you expand. Create, rename and kill right here, no commands.",
+    "feat.drawer.t": "Swipe to switch",
+    "feat.drawer.d": "Swipe from the left edge in the terminal and the same tree slides in. Switching windows happens in place — no reconnect, scrollback intact.",
+    "feat.term.t": "A quick bar that fits your hands",
+    "feat.term.d": "<code>Ctrl</code> <code>Esc</code> <code>Tab</code> and arrows, add / remove / reorder; turn a combo like <code>Ctrl+B d</code> into a single button.",
+    "feat.monitor.t": "Host monitor",
+    "feat.monitor.d": "CPU, memory, disk, network, processes and containers at a glance. What can't be read says \"unavailable\" instead of a fake 0.",
+    "feat.files.t": "Files",
+    "feat.files.d": "Browse, upload, download, rename, delete — and edit small text files on the phone. Same SSH connection, no extra login.",
+    "feat.web.t": "Port forwarding + built-in browser",
+    "feat.web.d": "When <code>http://localhost:5173</code> shows up in the terminal, a \"Forward it\" bar pops up. Open it in-app; flipping back to read logs won't drop it.",
+    "misc.title": "And a few more things",
+    "misc.1": "<b>Auto reconnect</b>Retries the moment the network is back, into the same tmux session with scrollback intact",
+    "misc.2": "<b>No fighting your desktop</b>Attached on your laptop too? Switching windows on the phone won't switch that screen",
+    "misc.3": "<b>Jump hosts</b>Multi-hop ProxyJump for machines behind a bastion",
+    "misc.4": "<b>Shared keys</b>Import a private key once, use it on many hosts",
+    "misc.5": "<b>Encrypted credentials</b>Passwords and keys are encrypted with the system keystore",
+    "misc.6": "<b>Host fingerprints</b>Remembered on first connect, a changed one is blocked",
+    "misc.7": "<b>Forwarding stays local</b>Bound to 127.0.0.1, so café Wi-Fi never sees your internal services",
+    "misc.8": "<b>Also</b>Commands after login, light / dark themes, terminal colors, English and Chinese, in-app update check",
+    "end.title": "Next time you SSH, land in tmux",
+    "end.lede": "Free and open source, Android 7.0 or later. Not on any app store yet — allow installing from an unknown source once.",
+    "foot.changelog": "Changelog"
+  };
+
+  const zh = {};
+  const nodes = document.querySelectorAll("[data-i18n]");
+  nodes.forEach(el => { zh[el.dataset.i18n] = el.innerHTML; });
+  const zhAlt = new Map();
+  document.querySelectorAll("[data-i18n-alt]").forEach(el => zhAlt.set(el, el.alt));
+  const zhTitle = document.title;
+
+  function apply(lang) {
+    const en = lang === "en";
+    document.documentElement.lang = en ? "en" : "zh-CN";
+    document.title = en ? "lightmux · The Android SSH client built for tmux" : zhTitle;
+    nodes.forEach(el => { const k = el.dataset.i18n; el.innerHTML = en && EN[k] ? EN[k] : zh[k]; });
+    zhAlt.forEach((v, el) => { el.alt = en ? EN[el.dataset.i18nAlt] : v; });
+    document.querySelectorAll("[data-shot]").forEach(img => {
+      img.src = "images/" + (en ? "en" : "zh") + "/" + img.dataset.shot + ".webp";
+    });
+    document.querySelector("[data-lang-toggle]").textContent = en ? "中文" : "EN";
+  }
+
+  let lang = null;
+  try { lang = localStorage.getItem("lightmux:lang"); } catch (e) { /* 隐私模式 */ }
+  if (!lang) lang = /^zh/i.test(navigator.language || "") ? "zh" : "en";
+  if (lang === "en") apply("en");
+
+  document.querySelector("[data-lang-toggle]").addEventListener("click", () => {
+    lang = lang === "en" ? "zh" : "en";
+    try { localStorage.setItem("lightmux:lang", lang); } catch (e) { /* 隐私模式 */ }
+    apply(lang);
+  });
+})();
+</script>
+
+<script>
+// 下载按钮直链最新 APK。CNB 的发布列表不给跨域，由站点 nginx 同源转发成 /releases.json（见 nginx.conf）。
+// 拿不到就保持默认链接（Releases 页），用户多点一下而已，不显示任何报错
+(function () {
+  fetch("/releases.json").then(r => r.ok ? r.json() : null).then(d => {
+    const rel = d && (d.releases || []).find(r => !r.is_draft && !r.is_prerelease);
+    const apk = rel && (rel.assets || []).find(a => /\.apk$/.test(a.name));
+    if (!apk) return;
+    const ver = rel.tag_ref.replace("refs/tags/", "");
+    // 按 1000 进制算，和 README、商店口径的「3.8MB」一致（1024 进制会显示成 3.6）
+    const size = (apk.size_in_byte / 1e6).toFixed(1) + " MB";
+    document.querySelectorAll("[data-apk]").forEach(a => { a.href = "https://cnb.cool" + apk.path; });
+    document.querySelectorAll("[data-ver]").forEach(s => { s.textContent = ver + " · " + size; });
+  }).catch(() => {});
+})();
+</script>
+</body>
+</html>
