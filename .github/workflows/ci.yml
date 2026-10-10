@@ -22,8 +22,11 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      # 默认 packages 含已下架的 `tools`，新版 cmdline-tools 找不到它直接失败
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
 
       # 依赖与 build-cache 落盘，第二次之后省掉大半构建时间
       - name: Set up Gradle
