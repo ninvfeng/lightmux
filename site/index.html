@@ -160,15 +160,21 @@ nav{position:sticky;top:0;z-index:50;height:66px;background:var(--nav-bg);
 .tree{background:var(--ink-stage);border-radius:var(--r-panel);padding:10px 0;font-size:13.5px;color:var(--mock-fg)}
 .tree-row{display:flex;align-items:center;gap:10px;padding:9px 20px}
 .tree-row .sub{font-size:11.5px;color:var(--mock-fg-2)}
-.tree-row .x{margin-left:auto;color:var(--mock-fg-2);font-size:12px}
-.tree-row.l1{padding-left:40px}
-.tree-row.l2{padding-left:64px}
-.tree-row.hit{background:var(--brand-soft);box-shadow:inset 3px 0 0 var(--logo)}
+.tree-row.l1{padding-left:36px}
+.tree-row .n{margin-left:auto;padding:1px 8px;border-radius:7px;background:rgba(255,255,255,.07);
+  font-family:var(--mono);font-size:11px;color:var(--mock-fg-2)}
+.tree-row .chev{color:var(--mock-fg-2);font-size:12px;width:12px;text-align:center}
 .ico{width:14px;height:14px;flex:none;border-radius:3px;background:var(--mock-fg-2);opacity:.6}
-.ico.win{background:none;border:1.5px solid var(--mock-fg-2);border-radius:3px}
-.live{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--logo)}
-.live::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--logo)}
-.tap{margin-left:auto;padding:3px 10px;border-radius:999px;background:var(--logo);color:#0B0D0F;font-size:11px;font-weight:700}
+.dot{width:7px;height:7px;flex:none;border-radius:50%;border:1.5px solid var(--mock-fg-2)}
+.dot.on{background:var(--logo);border-color:var(--logo)}
+.tiles{display:flex;flex-wrap:wrap;align-items:center;gap:7px;padding:2px 20px 10px 53px}
+.tile{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:8px;
+  background:rgba(255,255,255,.07);font-size:12.5px}
+.tile i{font-style:normal;font-family:var(--mono);font-size:11px;color:var(--mock-fg-2)}
+.tile.on{background:var(--brand-soft);box-shadow:inset 0 0 0 1px var(--logo);color:var(--logo)}
+.tile.on i{color:var(--logo)}
+.tile.add{background:none;box-shadow:inset 0 0 0 1px rgba(255,255,255,.14);color:var(--logo)}
+.tap{padding:3px 10px;border-radius:999px;background:var(--logo);color:#0B0D0F;font-size:11px;font-weight:700}
 .vs-good{color:var(--logo);font-weight:600;font-size:14px}
 @media(max-width:760px){
   .vs-grid{grid-template-columns:1fr;gap:20px}
@@ -326,11 +332,12 @@ monitor: 1 windows
       <div class="vs-card vs-after">
         <div class="tree">
           <div class="tree-row"><span class="ico"></span>web-prod <span class="sub">dev@10.20.0.11</span></div>
-          <div class="tree-row l1"><span class="ico"></span>api <span class="sub" data-i18n="why.wins">3 窗口</span></div>
-          <div class="tree-row l2"><span class="ico win"></span>0: server<span class="x">✕</span></div>
-          <div class="tree-row l2"><span class="ico win"></span>1: logs<span class="x">✕</span></div>
-          <div class="tree-row l2 hit"><span class="ico win"></span>2: shell <span class="live" data-i18n="why.active">活动</span><span class="tap" data-i18n="why.tap">点一下</span></div>
-          <div class="tree-row l1"><span class="ico"></span>deploy <span class="sub" data-i18n="why.win1">1 窗口</span></div>
+          <div class="tree-row l1"><span class="dot on"></span>api<span class="n">3</span><span class="chev">⌄</span></div>
+          <div class="tiles">
+            <span class="tile"><i>0</i>server</span><span class="tile"><i>1</i>logs</span><span class="tile on"><i>2</i>shell</span><span class="tile add">+</span>
+            <span class="tap" data-i18n="why.tap">点一下</span>
+          </div>
+          <div class="tree-row l1"><span class="dot"></span>deploy<span class="n">1</span><span class="chev">›</span></div>
         </div>
         <p class="vs-good" data-i18n="why.good">已展开时，一次点击就在里面了</p>
       </div>
@@ -463,7 +470,7 @@ monitor: 1 windows
     "why.lede": "Other SSH clients treat tmux as a feature inside the terminal: connect, type commands, then hunt for the window. lightmux flips it — the session is where you're going, the terminal is just what you get.",
     "why.f1": "Connect first", "why.f2": "Remember names", "why.f3": "Type commands", "why.f4": "Hunt for window",
     "why.cmt": "# Ctrl-b w … which window was it again",
-    "why.wins": "3 windows", "why.win1": "1 window", "why.active": "active", "why.tap": "Tap",
+    "why.tap": "Tap",
     "why.good": "Once expanded, one tap and you're in",
     "stats.label": "Small, and clean", "stats.size": "The whole app", "stats.ads": "Ads, accounts, analytics SDKs",
     "stats.license": "Open source", "stats.android": "Android",
