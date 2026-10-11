@@ -8,17 +8,21 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -585,10 +589,12 @@ private fun TmuxSessionNode(
             level = 1,
             leading = Icons.Default.Dashboard,
             title = session.name,
-            subtitle = buildString {
-                append(pluralStringResource(R.plurals.tmux_windows, session.windowCount, session.windowCount))
-                if (session.attached) append(" · ").append(stringResource(R.string.tmux_attached))
-            },
+            // 展开后窗口格子就摆在下面，再写一遍「N 窗口」是重复文字
+            subtitle = listOfNotNull(
+                if (expanded) null
+                else pluralStringResource(R.plurals.tmux_windows, session.windowCount, session.windowCount),
+                if (session.attached) stringResource(R.string.tmux_attached) else null,
+            ).joinToString(" · ").ifEmpty { null },
             // 行体点击 = attach 并进终端。展开窗口交给行尾箭头，别抢主路径。
             onClick = { onOpenTerminal(vm.attach(host, session.name)) },
             onLongClick = { menuOpen = true },
@@ -653,12 +659,13 @@ private fun TmuxSessionNode(
 }
 
 /**
- * 展开后的窗口组：收进一张圆角底板，而不是再往下缩一级的树行。
+ * 展开后的窗口：横排小格子，一格一个窗口，末尾一格「+」新建。
  *
- * 窗口是会话的「内容」不是又一层节点——和会话行同高、同款图标、同一列 ✕ 排下来，
- * 三级树就成了一面分不出层次的列表墙。底板把归属画出来，行高压紧、✕ 压淡，
- * 视线落在序号和名字上。
+ * 窗口名大多是 zsh / vim 这种短词，一行一个窗口、每行再挂一个 ✕，五个窗口就占掉半屏，
+ * 还都是重复的文字和图标。横排后一屏能看到全部窗口，视线只落在名字上。
+ * 关窗口是低频的破坏性动作，收进长按菜单；确认框仍由上层兜着。
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun WindowGroup(
     windows: List<TmuxWindow>,
@@ -666,97 +673,88 @@ private fun WindowGroup(
     onKill: (TmuxWindow) -> Unit,
     onNew: () -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            // 左缘对齐会话名（12 + 20 + 18 + 2），底板看上去是从会话名下面长出来的
-            .padding(start = 52.dp, end = 12.dp, bottom = 6.dp)
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
-            .padding(vertical = 4.dp),
+    FlowRow(
+        // 左缘对齐会话名（12 + 20 + 18 + 2），格子看上去是从会话名下面长出来的
+        modifier = Modifier.padding(start = 52.dp, end = 12.dp, bottom = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        // 同 [HostAction]：紧凑行里的 ✕ 守 48dp 最小触摸目标的话，行高就又被撑回去了
-        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
-            windows.forEach { window ->
-                WindowRow(window = window, onClick = { onOpen(window) }, onKill = { onKill(window) })
-            }
+        windows.forEach { window ->
+            WindowTile(window = window, onClick = { onOpen(window) }, onKill = { onKill(window) })
         }
-        Row(
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
+                .clip(TILE_SHAPE)
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, TILE_SHAPE)
                 .clickable(onClick = onNew)
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                .height(TILE_HEIGHT)
+                .padding(horizontal = 10.dp),
+            contentAlignment = Alignment.Center,
         ) {
             Icon(
                 Icons.Default.Add,
-                contentDescription = null,
+                contentDescription = stringResource(R.string.tmux_new_window),
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.width(INDEX_CHIP_WIDTH).size(16.dp),
-            )
-            Text(
-                text = stringResource(R.string.tmux_new_window),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp),
             )
         }
     }
 }
 
-/**
- * 行体点击 = 切过去，行尾图标 = 关掉它。两个动作都得一眼看见，误触由确认框兜。
- *
- * 活动窗口不再挂「● 活动」文字角标：序号胶囊直接填主色，扫一眼就知道 tmux 现在停在哪。
- */
+/** 点格子 = 切过去；长按 = 关掉它。活动窗口整格用主色描出来，扫一眼就知道 tmux 停在哪。 */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun WindowRow(window: TmuxWindow, onClick: () -> Unit, onKill: () -> Unit) {
+private fun WindowTile(window: TmuxWindow, onClick: () -> Unit, onKill: () -> Unit) {
     val colors = MaterialTheme.colorScheme
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(start = 12.dp, end = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Box(
+    var menuOpen by remember { mutableStateOf(false) }
+    Box {
+        Row(
             modifier = Modifier
-                .width(INDEX_CHIP_WIDTH)
-                .clip(RoundedCornerShape(6.dp))
-                .background(if (window.active) colors.primary else colors.surface)
-                .padding(vertical = 2.dp),
-            contentAlignment = Alignment.Center,
+                .clip(TILE_SHAPE)
+                .background(if (window.active) colors.primary.copy(alpha = 0.16f) else colors.surfaceVariant)
+                .then(if (window.active) Modifier.border(1.dp, colors.primary, TILE_SHAPE) else Modifier)
+                .combinedClickable(onClick = onClick, onLongClick = { menuOpen = true })
+                .height(TILE_HEIGHT)
+                .padding(horizontal = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Text(
                 text = window.index.toString(),
                 style = MaterialTheme.typography.labelMedium,
                 fontFamily = FontFamily.Monospace,
-                color = if (window.active) colors.onPrimary else colors.onSurfaceVariant,
+                color = if (window.active) colors.primary else colors.onSurfaceVariant,
             )
+            // 窗口名可以是空串（`rename-window ''`），那时只留序号
+            if (window.name.isNotEmpty()) {
+                Text(
+                    text = window.name,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (window.active) colors.primary else colors.onSurface,
+                    // 一个超长窗口名不该独占一整行把别的格子挤下去
+                    modifier = Modifier.widthIn(max = 140.dp),
+                )
+            }
         }
-        Text(
-            // 窗口名可以是空串（`rename-window ''`），序号已经在胶囊里了，这里留个横线占位
-            text = window.name.ifEmpty { "—" },
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (window.active) colors.onSurface else colors.onSurface.copy(alpha = 0.8f),
-            modifier = Modifier.weight(1f),
-        )
-        IconButton(onClick = onKill, modifier = Modifier.size(40.dp)) {
-            Icon(
-                Icons.Default.Close,
-                stringResource(R.string.tmux_kill_window),
-                tint = colors.onSurfaceVariant,
-                modifier = Modifier.size(16.dp),
+        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.tmux_kill_window)) },
+                leadingIcon = { Icon(Icons.Default.Close, contentDescription = null) },
+                onClick = {
+                    menuOpen = false
+                    onKill()
+                },
             )
         }
     }
 }
 
-/** 序号胶囊的宽度。两位数序号也放得下，「新建窗口」的 + 也按它居中，和上面的序号对成一列。 */
-private val INDEX_CHIP_WIDTH = 26.dp
+private val TILE_SHAPE = RoundedCornerShape(10.dp)
+
+/** 写死高度：「+」格只有图标、窗口格是文字，靠内边距撑的话两种格子高度对不齐 */
+private val TILE_HEIGHT = 34.dp
 
 /**
  * 主机行尾的一格动作。
