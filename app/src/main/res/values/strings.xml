@@ -143,11 +143,6 @@
     <string name="auth_challenge_title">Verification required</string>
 
     <!-- tmux 会话树 -->
-    <plurals name="tmux_windows">
-        <item quantity="one">%1$d window</item>
-        <item quantity="other">%1$d windows</item>
-    </plurals>
-    <string name="tmux_attached">attached</string>
     <string name="tmux_active">active</string>
     <string name="tmux_none">No tmux sessions</string>
     <string name="tmux_absent">tmux is not installed on this host</string>

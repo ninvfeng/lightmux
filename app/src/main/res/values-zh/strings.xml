@@ -138,10 +138,6 @@
     <string name="auth_challenge_title">需要验证</string>
 
     <!-- tmux 会话树 -->
-    <plurals name="tmux_windows">
-        <item quantity="other">%1$d 窗口</item>
-    </plurals>
-    <string name="tmux_attached">已附加</string>
     <string name="tmux_active">活动</string>
     <string name="tmux_none">没有 tmux 会话</string>
     <string name="tmux_absent">这台机器没装 tmux</string>

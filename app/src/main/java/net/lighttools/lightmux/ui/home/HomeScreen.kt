@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -75,7 +76,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -584,44 +584,65 @@ private fun TmuxSessionNode(
     }
     var menuOpen by remember { mutableStateOf(false) }
 
+    val colors = MaterialTheme.colorScheme
     Box {
-        TreeRow(
-            level = 1,
-            leading = Icons.Default.Dashboard,
-            title = session.name,
-            // 展开后窗口格子就摆在下面，再写一遍「N 窗口」是重复文字
-            subtitle = listOfNotNull(
-                if (expanded) null
-                else pluralStringResource(R.plurals.tmux_windows, session.windowCount, session.windowCount),
-                if (session.attached) stringResource(R.string.tmux_attached) else null,
-            ).joinToString(" · ").ifEmpty { null },
-            // 行体点击 = attach 并进终端。展开窗口交给行尾箭头，别抢主路径。
-            onClick = { onOpenTerminal(vm.attach(host, session.name)) },
-            onLongClick = { menuOpen = true },
-            // 有客户端连着的会话图标点亮：「哪个会话现在有人在用」比窗口数更常被找
-            leadingTint = if (session.attached) MaterialTheme.colorScheme.primary else Color.Unspecified,
-            trailing = {
-                // 箭头转过去而不是换图标：换图标是硬切，转动能让人看出「是这一行展开了」
-                val rotation by animateFloatAsState(if (expanded) 90f else 0f, label = "chevron")
-                IconButton(onClick = { vm.toggleSessionExpanded(host.id, session.name) }) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                        contentDescription = stringResource(R.string.tmux_toggle_windows),
-                        modifier = Modifier.rotate(rotation),
-                    )
-                }
-                // 结束会话摆到行尾最右，和裸会话的关闭图标对齐成一列：藏在长按里没人找得到。
-                // 压淡压小：它是低频的破坏性动作，不该和展开箭头一样抢眼
-                IconButton(onClick = onKill) {
-                    Icon(
-                        Icons.Default.Close,
-                        stringResource(R.string.tmux_kill),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
-            },
-        )
+        /*
+         * 不走 [TreeRow]：会话行要和下面的窗口格子一个调子——一行只剩名字，
+         * 「N 窗口」「已附加」这些字换成胶囊和圆点，✕ 收进长按菜单（同窗口格子）。
+         * 行体点击 = attach 并进终端，展开窗口交给行尾箭头，别抢主路径。
+         */
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .combinedClickable(
+                    onClick = { onOpenTerminal(vm.attach(host, session.name)) },
+                    onLongClick = { menuOpen = true },
+                )
+                .padding(start = 32.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            // 占和 TreeRow 图标一样的 18dp，名字才和下面「新建 tmux 会话」那几行左对齐。
+            // 有客户端连着的会话圆点点亮：「哪个会话现在有人在用」是扫主页时最常找的
+            Box(Modifier.size(18.dp), contentAlignment = Alignment.Center) {
+                Box(
+                    Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .then(
+                            if (session.attached) Modifier.background(colors.primary)
+                            else Modifier.border(1.5.dp, colors.onSurfaceVariant, CircleShape)
+                        )
+                )
+            }
+            Text(
+                text = session.name,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = session.windowCount.toString(),
+                style = MaterialTheme.typography.labelMedium,
+                fontFamily = FontFamily.Monospace,
+                color = colors.onSurfaceVariant,
+                modifier = Modifier
+                    .clip(TILE_SHAPE)
+                    .background(colors.surfaceVariant)
+                    .padding(horizontal = 8.dp, vertical = 2.dp),
+            )
+            // 箭头转过去而不是换图标：换图标是硬切，转动能让人看出「是这一行展开了」
+            val rotation by animateFloatAsState(if (expanded) 90f else 0f, label = "chevron")
+            IconButton(onClick = { vm.toggleSessionExpanded(host.id, session.name) }) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = stringResource(R.string.tmux_toggle_windows),
+                    tint = colors.onSurfaceVariant,
+                    modifier = Modifier.rotate(rotation),
+                )
+            }
+        }
 
         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
             DropdownMenuItem(
@@ -637,6 +658,15 @@ private fun TmuxSessionNode(
                 onClick = {
                     menuOpen = false
                     vm.detachOthers(host, session)
+                },
+            )
+            // 不可逆的那一个隔开放最后，免得顺手往下点一格就把会话杀了
+            HorizontalDivider()
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.tmux_kill)) },
+                onClick = {
+                    menuOpen = false
+                    onKill()
                 },
             )
         }
@@ -992,7 +1022,6 @@ fun TreeRow(
     modifier: Modifier = Modifier,
     subtitle: String? = null,
     badge: String? = null,
-    leadingTint: Color = Color.Unspecified,
     // 主机行前面已经有拖动手柄自带的留白，不需要这层再起一份缩进，见 HostRow 调用处。
     startInset: Dp = 12.dp,
     onClick: () -> Unit,
@@ -1011,7 +1040,7 @@ fun TreeRow(
         Icon(
             imageVector = leading,
             contentDescription = null,
-            tint = leadingTint.takeOrElse { MaterialTheme.colorScheme.onSurfaceVariant },
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(18.dp),
         )
         Column(modifier = Modifier.weight(1f)) {
