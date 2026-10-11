@@ -1,6 +1,14 @@
 package net.lighttools.lightmux.ui.home
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,9 +18,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
@@ -58,9 +68,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -577,17 +592,27 @@ private fun TmuxSessionNode(
             // 行体点击 = attach 并进终端。展开窗口交给行尾箭头，别抢主路径。
             onClick = { onOpenTerminal(vm.attach(host, session.name)) },
             onLongClick = { menuOpen = true },
+            // 有客户端连着的会话图标点亮：「哪个会话现在有人在用」比窗口数更常被找
+            leadingTint = if (session.attached) MaterialTheme.colorScheme.primary else Color.Unspecified,
             trailing = {
+                // 箭头转过去而不是换图标：换图标是硬切，转动能让人看出「是这一行展开了」
+                val rotation by animateFloatAsState(if (expanded) 90f else 0f, label = "chevron")
                 IconButton(onClick = { vm.toggleSessionExpanded(host.id, session.name) }) {
                     Icon(
-                        imageVector = if (expanded) Icons.Default.KeyboardArrowDown
-                        else Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                         contentDescription = stringResource(R.string.tmux_toggle_windows),
+                        modifier = Modifier.rotate(rotation),
                     )
                 }
-                // 结束会话摆到行尾最右，和裸会话、窗口的关闭图标对齐成一列：藏在长按里没人找得到。
+                // 结束会话摆到行尾最右，和裸会话的关闭图标对齐成一列：藏在长按里没人找得到。
+                // 压淡压小：它是低频的破坏性动作，不该和展开箭头一样抢眼
                 IconButton(onClick = onKill) {
-                    Icon(Icons.Default.Close, stringResource(R.string.tmux_kill))
+                    Icon(
+                        Icons.Default.Close,
+                        stringResource(R.string.tmux_kill),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp),
+                    )
                 }
             },
         )
@@ -611,39 +636,127 @@ private fun TmuxSessionNode(
         }
     }
 
-    if (expanded) {
-        session.windows.forEach { window ->
-            WindowRow(
-                window = window,
-                onClick = { onOpenTerminal(vm.openWindow(host, session.name, window)) },
-                onKill = { onKillWindow(window) },
-            )
-        }
-        // 建完直接落到新窗口里，和点已有窗口一个语义——建了却停在主页，用户还得再点一下。
-        TreeRow(
-            level = 2,
-            leading = Icons.Default.Add,
-            title = stringResource(R.string.tmux_new_window),
-            onClick = { onOpenTerminal(vm.newWindow(host, session)) },
+    // 展开/收起带一段高度动画：窗口组是整块出现的，硬切会让下面的会话行瞬间跳走，看不出是谁展开了
+    AnimatedVisibility(
+        visible = expanded,
+        enter = expandVertically() + fadeIn(),
+        exit = shrinkVertically() + fadeOut(),
+    ) {
+        WindowGroup(
+            windows = session.windows,
+            onOpen = { onOpenTerminal(vm.openWindow(host, session.name, it)) },
+            onKill = onKillWindow,
+            // 建完直接落到新窗口里，和点已有窗口一个语义——建了却停在主页，用户还得再点一下。
+            onNew = { onOpenTerminal(vm.newWindow(host, session)) },
         )
     }
 }
 
-/** 行体点击 = 切过去，行尾图标 = 关掉它。两个动作都得一眼看见，误触由确认框兜。 */
+/**
+ * 展开后的窗口组：收进一张圆角底板，而不是再往下缩一级的树行。
+ *
+ * 窗口是会话的「内容」不是又一层节点——和会话行同高、同款图标、同一列 ✕ 排下来，
+ * 三级树就成了一面分不出层次的列表墙。底板把归属画出来，行高压紧、✕ 压淡，
+ * 视线落在序号和名字上。
+ */
 @Composable
-private fun WindowRow(window: TmuxWindow, onClick: () -> Unit, onKill: () -> Unit) {
-    TreeRow(
-        level = 2,
-        leading = Icons.Default.Terminal,
-        title = windowLabel(window),
-        badge = if (window.active) "● ${stringResource(R.string.tmux_active)}" else null,
-        onClick = onClick,
+private fun WindowGroup(
+    windows: List<TmuxWindow>,
+    onOpen: (TmuxWindow) -> Unit,
+    onKill: (TmuxWindow) -> Unit,
+    onNew: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            // 左缘对齐会话名（12 + 20 + 18 + 2），底板看上去是从会话名下面长出来的
+            .padding(start = 52.dp, end = 12.dp, bottom = 6.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+            .padding(vertical = 4.dp),
     ) {
-        IconButton(onClick = onKill) {
-            Icon(Icons.Default.Close, stringResource(R.string.tmux_kill_window))
+        // 同 [HostAction]：紧凑行里的 ✕ 守 48dp 最小触摸目标的话，行高就又被撑回去了
+        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
+            windows.forEach { window ->
+                WindowRow(window = window, onClick = { onOpen(window) }, onKill = { onKill(window) })
+            }
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onNew)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Icon(
+                Icons.Default.Add,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.width(INDEX_CHIP_WIDTH).size(16.dp),
+            )
+            Text(
+                text = stringResource(R.string.tmux_new_window),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
         }
     }
 }
+
+/**
+ * 行体点击 = 切过去，行尾图标 = 关掉它。两个动作都得一眼看见，误触由确认框兜。
+ *
+ * 活动窗口不再挂「● 活动」文字角标：序号胶囊直接填主色，扫一眼就知道 tmux 现在停在哪。
+ */
+@Composable
+private fun WindowRow(window: TmuxWindow, onClick: () -> Unit, onKill: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(start = 12.dp, end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .width(INDEX_CHIP_WIDTH)
+                .clip(RoundedCornerShape(6.dp))
+                .background(if (window.active) colors.primary else colors.surface)
+                .padding(vertical = 2.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = window.index.toString(),
+                style = MaterialTheme.typography.labelMedium,
+                fontFamily = FontFamily.Monospace,
+                color = if (window.active) colors.onPrimary else colors.onSurfaceVariant,
+            )
+        }
+        Text(
+            // 窗口名可以是空串（`rename-window ''`），序号已经在胶囊里了，这里留个横线占位
+            text = window.name.ifEmpty { "—" },
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (window.active) colors.onSurface else colors.onSurface.copy(alpha = 0.8f),
+            modifier = Modifier.weight(1f),
+        )
+        IconButton(onClick = onKill, modifier = Modifier.size(40.dp)) {
+            Icon(
+                Icons.Default.Close,
+                stringResource(R.string.tmux_kill_window),
+                tint = colors.onSurfaceVariant,
+                modifier = Modifier.size(16.dp),
+            )
+        }
+    }
+}
+
+/** 序号胶囊的宽度。两位数序号也放得下，「新建窗口」的 + 也按它居中，和上面的序号对成一列。 */
+private val INDEX_CHIP_WIDTH = 26.dp
 
 /**
  * 主机行尾的一格动作。
@@ -842,7 +955,12 @@ private fun BareSessionRow(
         onClick = onClick,
     ) {
         IconButton(onClick = onClose) {
-            Icon(Icons.Default.Close, stringResource(R.string.close_session))
+            Icon(
+                Icons.Default.Close,
+                stringResource(R.string.close_session),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
+            )
         }
     }
 }
@@ -876,6 +994,7 @@ fun TreeRow(
     modifier: Modifier = Modifier,
     subtitle: String? = null,
     badge: String? = null,
+    leadingTint: Color = Color.Unspecified,
     // 主机行前面已经有拖动手柄自带的留白，不需要这层再起一份缩进，见 HostRow 调用处。
     startInset: Dp = 12.dp,
     onClick: () -> Unit,
@@ -894,7 +1013,7 @@ fun TreeRow(
         Icon(
             imageVector = leading,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            tint = leadingTint.takeOrElse { MaterialTheme.colorScheme.onSurfaceVariant },
             modifier = Modifier.size(18.dp),
         )
         Column(modifier = Modifier.weight(1f)) {
