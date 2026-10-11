@@ -182,16 +182,14 @@ nav{position:sticky;top:0;z-index:50;height:66px;background:var(--nav-bg);
 
 /* ---------- bento ---------- */
 .bento{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:44px}
-.cell{background:var(--bg-alt);border-radius:var(--r-card);padding:var(--pad-card) var(--pad-card) 0;
-  display:flex;flex-direction:column;gap:12px;overflow:hidden}
+.cell{background:var(--bg-alt);border-radius:var(--r-card);padding:14px 14px 18px;
+  display:flex;flex-direction:column;align-items:center;gap:14px}
 .section-alt .cell{background:#fff}
-.cell h3{font-size:17px;font-weight:700;color:var(--ink-deep)}
-.cell p{font-size:14px;line-height:1.7;color:var(--text-2)}
-.cell p code{background:var(--bg-alt);padding:1px 6px;border-radius:5px;font-size:12.5px;color:var(--ink-deep)}
-/* 整张截图都露出来：只露半截会把会话树、快捷栏这些要展示的东西裁掉；margin-top:auto 让同一行的手机底边对齐 */
-.shot{margin:auto auto var(--pad-card);width:min(100%,230px);border-radius:30px;padding:7px;
+/* 截图是主角：卡片内边距压小、手机尽量撑满，文案只留图下一行 */
+.shot{width:100%;max-width:340px;border-radius:34px;padding:8px;
   background:linear-gradient(160deg,#2b3135,#0d1013 40%,#1c2226)}
-.shot img{display:block;width:100%;aspect-ratio:720/1600;border-radius:24px}
+.shot img{display:block;width:100%;aspect-ratio:720/1600;border-radius:27px}
+.cell p{font-size:15px;font-weight:600;color:var(--ink-deep);text-align:center}
 @media(max-width:960px){.bento{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:620px){.bento{grid-template-columns:1fr}}
 
@@ -344,34 +342,28 @@ monitor: 1 windows
     <h2 data-i18n="feat.title">tmux 之外，够用的都在</h2>
     <div class="bento">
       <div class="cell">
-        <h3 data-i18n="feat.home.t">主页就是会话树</h3>
-        <p data-i18n="feat.home.d">主机 → tmux 会话 → 窗口，展开就看到。新建、重命名、结束都在这里，不用敲命令。</p>
         <div class="shot"><img data-shot="home" src="images/zh/home.webp" alt="" loading="lazy"></div>
+        <p data-i18n="feat.home">主页即会话树：主机 → 会话 → 窗口</p>
       </div>
       <div class="cell">
-        <h3 data-i18n="feat.drawer.t">侧滑切会话</h3>
-        <p data-i18n="feat.drawer.d">终端里从左边缘一划，拉出来的就是主页那棵树。切窗口终端原地换，不重连，滚屏不丢。</p>
         <div class="shot"><img data-shot="drawer" src="images/zh/drawer.webp" alt="" loading="lazy"></div>
+        <p data-i18n="feat.drawer">终端里左滑切会话，不重连</p>
       </div>
       <div class="cell">
-        <h3 data-i18n="feat.term.t">顺手的快捷栏</h3>
-        <p data-i18n="feat.term.d"><code>Ctrl</code> <code>Esc</code> <code>Tab</code> 方向键都在，可增删排序；<code>Ctrl+B d</code> 这样的组合也能做成一个按钮。</p>
         <div class="shot"><img data-shot="term" src="images/zh/term.webp" alt="" loading="lazy"></div>
+        <p data-i18n="feat.term">快捷栏随意增删，组合键一键发</p>
       </div>
       <div class="cell">
-        <h3 data-i18n="feat.monitor.t">主机监控</h3>
-        <p data-i18n="feat.monitor.d">CPU、内存、磁盘、网速、进程、容器，一眼看清哪台机器在忙。采不到的如实标「不可用」，不拿 0 充数。</p>
         <div class="shot"><img data-shot="monitor" src="images/zh/monitor.webp" alt="" loading="lazy"></div>
+        <p data-i18n="feat.monitor">CPU、内存、磁盘、进程一屏看清</p>
       </div>
       <div class="cell">
-        <h3 data-i18n="feat.files.t">文件管理</h3>
-        <p data-i18n="feat.files.d">浏览、上传、下载、重命名、删除，小文本文件直接在手机上改。复用同一条 SSH 连接。</p>
         <div class="shot"><img data-shot="files" src="images/zh/files.webp" alt="" loading="lazy"></div>
+        <p data-i18n="feat.files">浏览、传输、直接编辑文件</p>
       </div>
       <div class="cell">
-        <h3 data-i18n="feat.web.t">端口转发 + 内置浏览</h3>
-        <p data-i18n="feat.web.d">终端里一出现 <code>http://localhost:5173</code>，底部就浮出「转发它」。在 app 里打开，切回终端看日志也不断。</p>
         <div class="shot"><img data-shot="web" src="images/zh/web.webp" alt="" loading="lazy"></div>
+        <p data-i18n="feat.web">端口转发，app 内直接打开</p>
       </div>
     </div>
   </div>
@@ -456,18 +448,12 @@ monitor: 1 windows
     "stats.license": "Open source", "stats.android": "Android",
     "stats.note": "Apart from your own servers, the phone only talks to CNB once — when you tap to check for updates.",
     "feat.eyebrow": "Features", "feat.title": "Beyond tmux, everything you need",
-    "feat.home.t": "Home is the session tree",
-    "feat.home.d": "Host → tmux session → window, visible as soon as you expand. Create, rename and kill right here, no commands.",
-    "feat.drawer.t": "Swipe to switch",
-    "feat.drawer.d": "Swipe from the left edge in the terminal and the same tree slides in. Switching windows happens in place — no reconnect, scrollback intact.",
-    "feat.term.t": "A quick bar that fits your hands",
-    "feat.term.d": "<code>Ctrl</code> <code>Esc</code> <code>Tab</code> and arrows, add / remove / reorder; turn a combo like <code>Ctrl+B d</code> into a single button.",
-    "feat.monitor.t": "Host monitor",
-    "feat.monitor.d": "CPU, memory, disk, network, processes and containers at a glance. What can't be read says \"unavailable\" instead of a fake 0.",
-    "feat.files.t": "Files",
-    "feat.files.d": "Browse, upload, download, rename, delete — and edit small text files on the phone. Same SSH connection, no extra login.",
-    "feat.web.t": "Port forwarding + built-in browser",
-    "feat.web.d": "When <code>http://localhost:5173</code> shows up in the terminal, a \"Forward it\" bar pops up. Open it in-app; flipping back to read logs won't drop it.",
+    "feat.home": "Home is your tmux session tree",
+    "feat.drawer": "Swipe from the edge to switch sessions",
+    "feat.term": "Custom quick bar, key combos in one tap",
+    "feat.monitor": "CPU, memory, disk, processes at a glance",
+    "feat.files": "Browse, transfer and edit files",
+    "feat.web": "Forward a port, open it in-app",
     "misc.title": "And a few more things",
     "misc.1": "<b>Auto reconnect</b>Retries the moment the network is back, into the same tmux session with scrollback intact",
     "misc.2": "<b>No fighting your desktop</b>Attached on your laptop too? Switching windows on the phone won't switch that screen",
