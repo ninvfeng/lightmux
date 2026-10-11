@@ -30,7 +30,9 @@ to jump to another session.
     <td align="center" width="33%"><b>Files</b><br><img src="./docs/images/en/files.webp" width="240" alt="Files"></td>
   </tr>
   <tr>
-    <td align="center" colspan="3"><b>Port forwarding + built-in browser</b><br><img src="./docs/images/en/web.webp" width="240" alt="Port forwarding + built-in browser"></td>
+    <td align="center" width="33%"><b>Port forwarding + built-in browser</b><br><img src="./docs/images/en/web.webp" width="240" alt="Port forwarding + built-in browser"></td>
+    <td align="center" width="33%"><b>New host: password / key / jump host</b><br><img src="./docs/images/en/host.webp" width="240" alt="New host: password / key / jump host"></td>
+    <td align="center" width="33%"><b>Settings</b><br><img src="./docs/images/en/settings.webp" width="240" alt="Settings"></td>
   </tr>
 </table>
 

@@ -29,7 +29,9 @@ lightmux 把这几步省了：**打开 app，主页就是你所有服务器上�
     <td align="center" width="33%"><b>文件管理</b><br><img src="./docs/images/zh/files.webp" width="240" alt="文件管理"></td>
   </tr>
   <tr>
-    <td align="center" colspan="3"><b>端口转发 + 内置浏览</b><br><img src="./docs/images/zh/web.webp" width="240" alt="端口转发 + 内置浏览"></td>
+    <td align="center" width="33%"><b>端口转发 + 内置浏览</b><br><img src="./docs/images/zh/web.webp" width="240" alt="端口转发 + 内置浏览"></td>
+    <td align="center" width="33%"><b>新建主机：密码 / 私钥 / 跳板机</b><br><img src="./docs/images/zh/host.webp" width="240" alt="新建主机：密码 / 私钥 / 跳板机"></td>
+    <td align="center" width="33%"><b>设置</b><br><img src="./docs/images/zh/settings.webp" width="240" alt="设置"></td>
   </tr>
 </table>
 

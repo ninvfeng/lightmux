@@ -190,9 +190,7 @@ nav{position:sticky;top:0;z-index:50;height:66px;background:var(--nav-bg);
   background:linear-gradient(160deg,#2b3135,#0d1013 40%,#1c2226)}
 .shot img{display:block;width:100%;aspect-ratio:720/1600;border-radius:27px}
 .cell p{font-size:15px;font-weight:600;color:var(--ink-deep);text-align:center}
-/* 7 张卡片三列放不满，落单的最后一张居中 */
-.bento>.cell:last-child:nth-child(3n+1){grid-column:2}
-@media(max-width:960px){.bento>.cell:last-child:nth-child(3n+1){grid-column:auto}.bento{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:960px){.bento{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:620px){.bento{grid-template-columns:1fr}}
 
 /* ---------- 还有一些小事 ---------- */
@@ -371,6 +369,14 @@ monitor: 1 windows
         <div class="shot"><img data-shot="web" src="images/zh/web.webp" alt="" loading="lazy"></div>
         <p data-i18n="feat.web">端口转发，app 内直接打开</p>
       </div>
+      <div class="cell">
+        <div class="shot"><img data-shot="host" src="images/zh/host.webp" alt="" loading="lazy"></div>
+        <p data-i18n="feat.host">加主机：密码、私钥、跳板机都支持</p>
+      </div>
+      <div class="cell">
+        <div class="shot"><img data-shot="settings" src="images/zh/settings.webp" alt="" loading="lazy"></div>
+        <p data-i18n="feat.settings">主题、配色、字号，按手感调</p>
+      </div>
     </div>
   </div>
 </section>
@@ -461,6 +467,8 @@ monitor: 1 windows
     "feat.monitor": "Per-host detail: processes, containers",
     "feat.files": "Browse, transfer and edit files",
     "feat.web": "Forward a port, open it in-app",
+    "feat.host": "Password, key or jump host",
+    "feat.settings": "Theme, colors and font size",
     "misc.title": "And a few more things",
     "misc.1": "<b>Auto reconnect</b>Retries the moment the network is back, into the same tmux session with scrollback intact",
     "misc.2": "<b>No fighting your desktop</b>Attached on your laptop too? Switching windows on the phone won't switch that screen",
