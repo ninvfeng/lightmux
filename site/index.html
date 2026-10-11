@@ -188,13 +188,10 @@ nav{position:sticky;top:0;z-index:50;height:66px;background:var(--nav-bg);
 .cell h3{font-size:17px;font-weight:700;color:var(--ink-deep)}
 .cell p{font-size:14px;line-height:1.7;color:var(--text-2)}
 .cell p code{background:var(--bg-alt);padding:1px 6px;border-radius:5px;font-size:12.5px;color:var(--ink-deep)}
-/* 截图只露上半截：手机 UI 的信息都在上面，整张放进格子里字会小到看不清 */
-.shot{margin:10px auto 0;width:min(100%,280px);height:340px;border-radius:30px 30px 0 0;padding:8px 8px 0;
-  background:linear-gradient(160deg,#2b3135,#0d1013 40%,#1c2226);overflow:hidden}
-.shot img{width:100%;border-radius:23px 23px 0 0}
-/* 快捷栏在屏幕最底下：改成贴底对齐，溢出的上半截被裁掉 */
-.shot.end{display:flex;flex-direction:column;justify-content:flex-end}
-.shot.end img{flex:none;border-radius:0}
+/* 整张截图都露出来：只露半截会把会话树、快捷栏这些要展示的东西裁掉；margin-top:auto 让同一行的手机底边对齐 */
+.shot{margin:auto auto var(--pad-card);width:min(100%,230px);border-radius:30px;padding:7px;
+  background:linear-gradient(160deg,#2b3135,#0d1013 40%,#1c2226)}
+.shot img{display:block;width:100%;aspect-ratio:720/1600;border-radius:24px}
 @media(max-width:960px){.bento{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:620px){.bento{grid-template-columns:1fr}}
 
@@ -359,7 +356,7 @@ monitor: 1 windows
       <div class="cell">
         <h3 data-i18n="feat.term.t">顺手的快捷栏</h3>
         <p data-i18n="feat.term.d"><code>Ctrl</code> <code>Esc</code> <code>Tab</code> 方向键都在，可增删排序；<code>Ctrl+B d</code> 这样的组合也能做成一个按钮。</p>
-        <div class="shot end"><img data-shot="term" src="images/zh/term.webp" alt="" loading="lazy"></div>
+        <div class="shot"><img data-shot="term" src="images/zh/term.webp" alt="" loading="lazy"></div>
       </div>
       <div class="cell">
         <h3 data-i18n="feat.monitor.t">主机监控</h3>
