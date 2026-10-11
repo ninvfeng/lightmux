@@ -190,7 +190,9 @@ nav{position:sticky;top:0;z-index:50;height:66px;background:var(--nav-bg);
   background:linear-gradient(160deg,#2b3135,#0d1013 40%,#1c2226)}
 .shot img{display:block;width:100%;aspect-ratio:720/1600;border-radius:27px}
 .cell p{font-size:15px;font-weight:600;color:var(--ink-deep);text-align:center}
-@media(max-width:960px){.bento{grid-template-columns:repeat(2,1fr)}}
+/* 7 张卡片三列放不满，落单的最后一张居中 */
+.bento>.cell:last-child:nth-child(3n+1){grid-column:2}
+@media(max-width:960px){.bento>.cell:last-child:nth-child(3n+1){grid-column:auto}.bento{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:620px){.bento{grid-template-columns:1fr}}
 
 /* ---------- 还有一些小事 ---------- */
@@ -354,8 +356,12 @@ monitor: 1 windows
         <p data-i18n="feat.term">快捷栏随意增删，组合键一键发</p>
       </div>
       <div class="cell">
+        <div class="shot"><img data-shot="overview" src="images/zh/overview.webp" alt="" loading="lazy"></div>
+        <p data-i18n="feat.overview">所有主机的负载，一屏看全</p>
+      </div>
+      <div class="cell">
         <div class="shot"><img data-shot="monitor" src="images/zh/monitor.webp" alt="" loading="lazy"></div>
-        <p data-i18n="feat.monitor">CPU、内存、磁盘、进程一屏看清</p>
+        <p data-i18n="feat.monitor">单台主机详情：进程、容器、网速</p>
       </div>
       <div class="cell">
         <div class="shot"><img data-shot="files" src="images/zh/files.webp" alt="" loading="lazy"></div>
@@ -451,7 +457,8 @@ monitor: 1 windows
     "feat.home": "Home is your tmux session tree",
     "feat.drawer": "Swipe from the edge to switch sessions",
     "feat.term": "Custom quick bar, key combos in one tap",
-    "feat.monitor": "CPU, memory, disk, processes at a glance",
+    "feat.overview": "Every host's load on one screen",
+    "feat.monitor": "Per-host detail: processes, containers",
     "feat.files": "Browse, transfer and edit files",
     "feat.web": "Forward a port, open it in-app",
     "misc.title": "And a few more things",

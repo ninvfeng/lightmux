@@ -25,9 +25,12 @@ to jump to another session.
     <td align="center" width="33%"><b>Swipe to switch</b><br><img src="./docs/images/en/drawer.webp" width="240" alt="Swipe to switch"></td>
   </tr>
   <tr>
+    <td align="center" width="33%"><b>Monitor overview: every host at a glance</b><br><img src="./docs/images/en/overview.webp" width="240" alt="Monitor overview: every host at a glance"></td>
     <td align="center" width="33%"><b>Host monitor</b><br><img src="./docs/images/en/monitor.webp" width="240" alt="Host monitor"></td>
     <td align="center" width="33%"><b>Files</b><br><img src="./docs/images/en/files.webp" width="240" alt="Files"></td>
-    <td align="center" width="33%"><b>Port forwarding + built-in browser</b><br><img src="./docs/images/en/web.webp" width="240" alt="Port forwarding + built-in browser"></td>
+  </tr>
+  <tr>
+    <td align="center" colspan="3"><b>Port forwarding + built-in browser</b><br><img src="./docs/images/en/web.webp" width="240" alt="Port forwarding + built-in browser"></td>
   </tr>
 </table>
 

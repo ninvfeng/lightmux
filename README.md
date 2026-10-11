@@ -24,9 +24,12 @@ lightmux 把这几步省了：**打开 app，主页就是你所有服务器上�
     <td align="center" width="33%"><b>侧滑切会话</b><br><img src="./docs/images/zh/drawer.webp" width="240" alt="侧滑切会话"></td>
   </tr>
   <tr>
+    <td align="center" width="33%"><b>监控概览：所有主机一屏看</b><br><img src="./docs/images/zh/overview.webp" width="240" alt="监控概览：所有主机一屏看"></td>
     <td align="center" width="33%"><b>主机监控</b><br><img src="./docs/images/zh/monitor.webp" width="240" alt="主机监控"></td>
     <td align="center" width="33%"><b>文件管理</b><br><img src="./docs/images/zh/files.webp" width="240" alt="文件管理"></td>
-    <td align="center" width="33%"><b>端口转发 + 内置浏览</b><br><img src="./docs/images/zh/web.webp" width="240" alt="端口转发 + 内置浏览"></td>
+  </tr>
+  <tr>
+    <td align="center" colspan="3"><b>端口转发 + 内置浏览</b><br><img src="./docs/images/zh/web.webp" width="240" alt="端口转发 + 内置浏览"></td>
   </tr>
 </table>
 
