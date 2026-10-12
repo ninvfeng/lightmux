@@ -430,7 +430,8 @@ monitor: 1 windows
   if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   const io = new IntersectionObserver(entries => {
     entries.forEach(e => { if (e.isIntersecting) { e.target.classList.remove("pre"); io.unobserve(e.target); } });
-  }, { threshold: 0.15 });
+  // 按比例触发对高区块（功能区）不友好：15% 可能就要滚一屏多；改成顶部进入视口底部 10% 内即显示
+  }, { rootMargin: "0px 0px -10% 0px" });
   document.querySelectorAll(".rv").forEach(el => {
     const r = el.getBoundingClientRect();
     if (r.top > innerHeight) { el.classList.add("pre"); io.observe(el); }
