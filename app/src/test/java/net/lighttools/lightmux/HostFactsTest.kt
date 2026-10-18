@@ -2,6 +2,7 @@ package net.lighttools.lightmux
 
 import net.lighttools.lightmux.monitor.FactsResult
 import net.lighttools.lightmux.monitor.HostFacts
+import net.lighttools.lightmux.monitor.HostPulse
 import net.lighttools.lightmux.monitor.HostSnapshot
 import net.lighttools.lightmux.monitor.Uptime
 import net.lighttools.lightmux.monitor.formatBytes
@@ -187,7 +188,8 @@ class HostFactsTest {
 
     @Test
     fun `采集命令不依赖 top free vmstat，磁盘用 df -P`() {
-        val cmd = HostFacts.PROBE_COMMAND
+        // 只看 Linux 分支：macOS 分支没有 /proc，CPU 只能靠 top
+        val cmd = HostFacts.PROBE_COMMAND.substringBefore("; else echo ${HostFacts.MARKER_PROCFS}1")
         assertTrue(cmd.contains("df -P -k"))
         listOf("top ", "free ", "vmstat").forEach {
             assertTrue("命令里不该出现 $it", !cmd.contains(it))
@@ -813,7 +815,7 @@ class HostFactsTest {
 
     @Test
     fun `没有 proc stat 的主机返回 Unsupported`() {
-        // macOS / BSD：首版明确只支持 Linux，页面要如实说「暂不支持」而不是「读取失败」
+        // BSD 等：页面要如实说「暂不支持」而不是「读取失败」（macOS 走自己的分支，见下面几条）
         assertEquals(FactsResult.Unsupported, HostFacts.parse(output(procfs = "0")))
     }
 
@@ -960,5 +962,53 @@ class HostFactsTest {
     fun `百分比保留一位小数`() {
         assertEquals("12.3", formatPercent(0.1234))
         assertEquals("100.0", formatPercent(1.0))
+    }
+
+    // ---- macOS ---------------------------------------------------------------
+
+    @Test
+    fun `macOS 走单独分支，Linux 分支排在前面`() {
+        listOf(HostFacts.PROBE_COMMAND, HostFacts.QUICK_COMMAND, HostPulse.COMMAND).forEach { cmd ->
+            val darwin = cmd.indexOf("; else echo ${HostFacts.MARKER_PROCFS}1")
+            assertTrue(darwin > 0)
+            assertTrue(cmd.indexOf("cat /proc/uptime") < darwin)
+            assertTrue(cmd.indexOf("__lm_up;") > darwin)
+            assertTrue(cmd.endsWith("; fi"))
+        }
+    }
+
+    @Test
+    fun `macOS 的 CPU 由 top 的区间占比拼出，没有逐核数据`() {
+        // 实机采样：top 第二帧 11.15% user, 7.25% sys, 81.58% idle
+        val snapshot = snapshotOf(output(cpu1 = "cpu 0 0 0 0", cpu2 = "cpu 1115 0 725 8158"))
+        assertEquals(0.184, snapshot.cpu!!.total, 0.001)
+        assertTrue(snapshot.cpu!!.cores.isEmpty())
+    }
+
+    @Test
+    fun `macOS 拼出的网卡与地址能解析，AirDrop 链路算虚拟网卡`() {
+        val snapshot = snapshotOf(
+            output(
+                net1 = "en0: 1000 0 0 0 0 0 0 0 500\nawdl0: 10 0 0 0 0 0 0 0 10\nen3: 0 0 0 0 0 0 0 0 0",
+                net2 = "en0: 3000 0 0 0 0 0 0 0 1500\nawdl0: 10 0 0 0 0 0 0 0 10\nen3: 0 0 0 0 0 0 0 0 0",
+                addr = "0: en0 inet 192.168.3.201",
+            )
+        )
+        assertEquals(listOf("en0", "awdl0"), snapshot.interfaces.map { it.name })
+        assertEquals(1000.0, snapshot.interfaces[0].rxBytesPerSecond, 1e-9)
+        assertEquals("192.168.3.201", snapshot.interfaces[0].address)
+        assertTrue(snapshot.interfaces[1].virtual)
+        assertEquals(listOf("192.168.3.201"), snapshot.addresses)
+    }
+
+    @Test
+    fun `macOS 的系统信息由 sw_vers 拼成 PRETTY_NAME`() {
+        val info = snapshotOf(
+            output(
+                system = "${HostFacts.PREFIX_KERNEL}Darwin 25.6.0\n${HostFacts.PREFIX_HOSTNAME}mac.local\nPRETTY_NAME=\"macOS 26.6.2\"",
+            )
+        ).system
+        assertEquals("macOS 26.6.2", info.distro)
+        assertEquals("Darwin 25.6.0", info.kernel)
     }
 }

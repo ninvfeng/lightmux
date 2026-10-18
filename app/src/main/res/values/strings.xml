@@ -218,7 +218,7 @@
     <string name="monitor_ip_copied">IP copied</string>
     <string name="monitor_expand">Expand</string>
     <string name="monitor_collapse">Collapse</string>
-    <string name="monitor_unsupported">This host runs an OS we cannot read yet — only Linux is supported for now.</string>
+    <string name="monitor_unsupported">This host runs an OS we cannot read yet — only Linux and macOS are supported for now.</string>
     <string name="monitor_failed">Could not read metrics: %1$s</string>
 
     <!-- 文件页 -->

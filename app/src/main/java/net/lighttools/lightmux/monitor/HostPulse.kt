@@ -11,23 +11,38 @@ package net.lighttools.lightmux.monitor
 object HostPulse {
 
     /** 只读四个 `/proc` 文件外加一次 `df`。`/proc/stat` 只要首行（总体那行），核数多的机器上整份能有几十行。 */
-    val COMMAND: String = (
-        HostFacts.PREAMBLE +
-            listOf(
-                "echo ${HostFacts.MARKER_UPTIME1}", "cat /proc/uptime 2>/dev/null",
-                "echo ${HostFacts.MARKER_CPU1}", "head -n 1 /proc/stat 2>/dev/null",
-                "echo ${HostFacts.MARKER_NET1}", "cat /proc/net/dev 2>/dev/null",
-                "echo ${HostFacts.MARKER_MEM}", "cat /proc/meminfo 2>/dev/null",
-                "echo ${HostFacts.MARKER_DISK}", "df -P -k 2>/dev/null",
-                "echo ${HostFacts.MARKER_END}",
-            )
-        ).joinToString("; ")
+    val COMMAND: String = HostFacts.byOs(
+        linux = listOf(
+            "echo ${HostFacts.MARKER_UPTIME1}", "cat /proc/uptime 2>/dev/null",
+            "echo ${HostFacts.MARKER_CPU1}", "head -n 1 /proc/stat 2>/dev/null",
+            "echo ${HostFacts.MARKER_NET1}", "cat /proc/net/dev 2>/dev/null",
+            "echo ${HostFacts.MARKER_MEM}", "cat /proc/meminfo 2>/dev/null",
+            "echo ${HostFacts.MARKER_DISK}", "df -P -k 2>/dev/null",
+            "echo ${HostFacts.MARKER_END}",
+        ),
+        // macOS 没有累计的 CPU 计数，没法跨两轮做差。改用各进程 %cpu 之和 / 核数——内核给的是
+        // 最近几秒的衰减均值，当场就是一个占比：CPU1 写全零基准、CPU2 写这个占比，[parse] 当场算出来。
+        darwin = listOf(
+            "echo ${HostFacts.MARKER_UPTIME1}", "__lm_up",
+            "echo ${HostFacts.MARKER_CPU1}", "echo 'cpu 0 0 0 0'",
+            "echo ${HostFacts.MARKER_CPU2}",
+            "ps -A -o %cpu= 2>/dev/null | awk -v n=\"\$(sysctl -n hw.ncpu 2>/dev/null)\" " +
+                "'{ s += \$1 } END { if (n > 0) { b = s / n; if (b > 100) b = 100; " +
+                "printf \"cpu %.0f 0 0 %.0f\\n\", b * 100, (100 - b) * 100 } }'",
+            "echo ${HostFacts.MARKER_NET1}", HostFacts.DARWIN_NET,
+            "echo ${HostFacts.MARKER_MEM}", HostFacts.DARWIN_MEM,
+            "echo ${HostFacts.MARKER_DISK}", HostFacts.DARWIN_DISK,
+            "echo ${HostFacts.MARKER_END}",
+        ),
+    )
 
     /** 一轮的原始计数。速率与使用率都要靠两份 [Sample] 做差，单份没有意义。 */
     class Sample(
         /** 取自远端 `/proc/uptime`，而不是本机时钟：网络抖动不该算进采样间隔 */
         val uptime: Double,
         val cpu: LongArray,
+        /** 远端当场给出的占比（macOS，见 [COMMAND]），非空时不必等下一轮做差 */
+        val instantCpu: Double?,
         /** 网卡名 → (收, 发) 累计字节。只保留真实网卡，见 [parse] */
         val net: Map<String, Pair<Long, Long>>,
         val memory: MemoryUsage,
@@ -51,20 +66,22 @@ object HostPulse {
         val sections = HostFacts.split(lines)
         val uptime = HostFacts.firstDouble(sections[HostFacts.MARKER_UPTIME1]) ?: return null
         val cpu = HostFacts.cpuCounters(sections[HostFacts.MARKER_CPU1])["cpu"] ?: return null
+        val instantCpu = HostFacts.cpuCounters(sections[HostFacts.MARKER_CPU2])["cpu"]
+            ?.let { HostFacts.usageBetween(cpu, it) }
         val memory = HostFacts.parseMemory(sections[HostFacts.MARKER_MEM])?.first ?: return null
         // 虚拟网卡（veth / docker0…）上的流量多半是本机容器之间转的，计进来会把同一份流量算两遍
         val net = HostFacts.netCounters(sections[HostFacts.MARKER_NET1])
             .filterKeys { !HostFacts.isVirtualInterface(it) }
         // 一行只放得下一块盘，挑最满的：概览要回答的是「哪台快满了」，不是「每块盘各多少」
         val disk = HostFacts.parseDisks(sections[HostFacts.MARKER_DISK]).maxByOrNull { it.ratio }
-        return Sample(uptime, cpu, net, memory, disk)
+        return Sample(uptime, cpu, instantCpu, net, memory, disk)
     }
 
     fun reading(previous: Sample?, current: Sample): Reading {
         val interval = previous?.let { current.uptime - it.uptime }
         // 间隔不成立（远端重启过、或两轮挨得太近）时宁可不给速率，也不拿一个编出来的分母去除
         if (previous == null || interval == null || interval < MIN_INTERVAL_SECONDS) {
-            return Reading(cpu = null, memory = current.memory, disk = current.disk, rxBytesPerSecond = null, txBytesPerSecond = null)
+            return Reading(cpu = current.instantCpu, memory = current.memory, disk = current.disk, rxBytesPerSecond = null, txBytesPerSecond = null)
         }
         // 只认两轮都在的网卡：中途冒出来的卡没有基准，算进去就是把它开机以来的总量当成这几秒的流量
         var rx = 0L
@@ -75,7 +92,7 @@ object HostPulse {
             tx += (now.second - before.second).coerceAtLeast(0L)
         }
         return Reading(
-            cpu = HostFacts.usageBetween(previous.cpu, current.cpu),
+            cpu = current.instantCpu ?: HostFacts.usageBetween(previous.cpu, current.cpu),
             memory = current.memory,
             disk = current.disk,
             rxBytesPerSecond = rx / interval,

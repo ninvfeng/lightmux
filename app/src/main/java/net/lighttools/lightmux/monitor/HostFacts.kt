@@ -15,7 +15,10 @@ object HostFacts {
     // ---- 哨兵 ----------------------------------------------------------------
     // 输出靠这些整行标记切段。命令输出里不可能出现同样的整行（挂载点、网卡名再怪也带不上下划线围栏）。
 
-    /** `1` = 有 `/proc/stat`；`0` = 没有（macOS / *BSD），直接判 [FactsResult.Unsupported] */
+    /**
+     * `1` = 输出是 `/proc` 格式，可解析：Linux 直读，macOS 由 [byOs] 的 Darwin 分支在 shell 里拼成同样的格式；
+     * `0` = 两者都不是（*BSD 等），直接判 [FactsResult.Unsupported]
+     */
     const val MARKER_PROCFS = "__LM_PROCFS__:"
 
     const val MARKER_UPTIME1 = "__LM_UP1__"
@@ -50,11 +53,10 @@ object HostFacts {
     )
 
     /**
-     * 两条命令共用的开场白：设 PATH、关 zsh 的 NOMATCH、判 procfs。抽出来是为了
-     * [QUICK_COMMAND] 和 [PROBE_COMMAND] 的这一段**逐字节相同**——两条命令都要在同一把
-     * `preflight` 判定下解析，写两遍迟早会漂移出一个不一致的版本。
+     * 采集命令共用的开场白：设 PATH、关 zsh 的 NOMATCH。抽出来是为了几条命令的这一段**逐字节相同**，
+     * 写几遍迟早会漂移出一个不一致的版本。procfs 判定在 [byOs] 里，跟着系统分支走。
      */
-    internal val PREAMBLE: List<String> = listOf(
+    private val PREAMBLE: List<String> = listOf(
         // exec channel 是非交互 shell，不读 rc 文件，PATH 里可能没有 sbin
         "export PATH=\"\$PATH:/usr/sbin:/sbin:/usr/local/bin\"",
         // zsh 默认开 NOMATCH：通配符匹配不到时**报错并中止整条命令**，而不是像 sh / bash
@@ -62,15 +64,105 @@ object HostFacts {
         // 于是远端登录 shell 是 zsh 的主机连 __LM_END__ 都吐不出来，整页监控报「采集失败」。
         // sh / bash 没有 setopt 这个内建，command not found 被 `|| true` 吞掉。
         "setopt no_nomatch 2>/dev/null || true",
-        "if [ -r /proc/stat ]; then echo ${MARKER_PROCFS}1; else echo ${MARKER_PROCFS}0; fi",
     )
 
+    /**
+     * 按远端系统分两支，三条采集命令（[PROBE_COMMAND] / [QUICK_COMMAND] / [HostPulse.COMMAND]）共用。
+     *
+     * macOS 没有 `/proc`，但它的 `sysctl` / `vm_stat` / `netstat` 拿得到同样的数。**在远端 shell 里
+     * 拼成 `/proc` 的格式**再吐回来，Kotlin 这边的解析就只有一份——两套解析器迟早漂移出两种口径。
+     * Linux 分支排在前面，单测里按 `indexOf` 查顺序时命中的是它。
+     */
+    internal fun byOs(linux: List<String>, darwin: List<String>): String {
+        val procfs = "if [ -r /proc/stat ]; then echo ${MARKER_PROCFS}1; else echo ${MARKER_PROCFS}0; fi"
+        return PREAMBLE.joinToString("; ") +
+            "; if [ \"\$(uname -s 2>/dev/null)\" != Darwin ]; then " +
+            (listOf(procfs) + linux).joinToString("; ") +
+            "; else " +
+            (listOf("echo ${MARKER_PROCFS}1") + DARWIN_PRELUDE + darwin).joinToString("; ") +
+            "; fi"
+    }
+
+    /**
+     * Darwin 分支的公共部分：定义取 uptime 的函数。
+     *
+     * 没有 `/proc/uptime`，用「现在 - kern.boottime」。必须带小数：采样间隔拿两次 uptime 相减当分母，
+     * `date +%s` 只到秒，1.8 秒的间隔会被算成 1 或 2，网速跟着偏差一倍。macOS 自带 perl，
+     * 万一被删了才退回整秒。
+     */
+    private val DARWIN_PRELUDE: List<String> = listOf(
+        "__lm_boot=\$(sysctl -n kern.boottime 2>/dev/null | awk '{print \$4+0}')",
+        "__lm_up() { perl -MTime::HiRes=time -e 'printf \"%.2f\\n\", time - \$ARGV[0]' \"\$__lm_boot\" 2>/dev/null " +
+            "|| echo \$((\$(date +%s) - __lm_boot)); }",
+    )
+
+    /** `{ 2.39 2.76 2.87 }` → `/proc/loadavg` 的前三列。 */
+    internal const val DARWIN_LOAD = "sysctl -n vm.loadavg 2>/dev/null | tr -d '{}'"
+
+    /**
+     * 拼出 `/proc/meminfo` 的四个字段。
+     *
+     * 「已用」取活动监视器的口径：App 内存（匿名页 - 可清除页）+ 联动内存 + 压缩器占用。
+     * 不能拿 `Pages free` 当可用：macOS 会把空闲内存尽量拿去做文件缓存，free 常年只剩几百 MB，
+     * 照它算每台 Mac 都显示内存将满。
+     */
+    internal const val DARWIN_MEM =
+        "{ sysctl -n hw.memsize; vm_stat; sysctl -n vm.swapusage; } 2>/dev/null | awk '" +
+            "NR == 1 { total = \$1 } " +
+            "/page size of/ { ps = \$8 } " +
+            "/^Anonymous pages/ { anon = \$3 } " +
+            "/^Pages purgeable/ { purg = \$3 } " +
+            "/^Pages wired down/ { wired = \$4 } " +
+            "/occupied by compressor/ { comp = \$5 } " +
+            "/^total = / { swt = \$3 + 0; swu = \$6 + 0 } " +
+            "END { if (total > 0 && ps > 0) { " +
+            "printf \"MemTotal: %.0f kB\\nMemAvailable: %.0f kB\\n\", total / 1024, (total - (anon - purg + wired + comp) * ps) / 1024; " +
+            "printf \"SwapTotal: %.0f kB\\nSwapFree: %.0f kB\\n\", swt * 1024, (swt - swu) * 1024 } }'"
+
+    /**
+     * 拼出 `/proc/net/dev` 的行：收字节在第 0 位、发字节在第 8 位。
+     *
+     * 只取 `<Link#N>` 那一行（每张网卡一条，按地址展开的那几行是同一份计数的重复）；
+     * 字节列**从行尾倒着数**——没有 MAC 地址的网卡（utun）Address 列是空的，正着数会错位。
+     * 名字带 `*` 表示网卡没起来，剥掉。
+     */
+    internal const val DARWIN_NET =
+        "netstat -ibn 2>/dev/null | awk '\$3 ~ /^<Link/ && \$1 !~ /^lo/ { n = \$1; sub(/\\*\$/, \"\", n); " +
+            "printf \"%s: %s 0 0 0 0 0 0 0 %s\\n\", n, \$(NF - 4), \$(NF - 1) }'"
+
+    /**
+     * APFS 的 `/` 是只读的系统快照（只占十几 G），真正装数据的是 `/System/Volumes/Data`，
+     * 两者共用一个容器、可用空间相同。只留 Data 那条：`/` 的占用率常年个位数，看着像盘很空。
+     * 其余 `/System/Volumes/` 下的卷（VM / Preboot / Update…）是系统内部卷，和伪文件系统一样滤掉。
+     */
+    internal const val DARWIN_DISK =
+        "df -P -k 2>/dev/null | awk '\$NF != \"/\" && (\$NF !~ /^\\/System\\// || \$NF == \"/System/Volumes/Data\")'"
+
+    /** 拼成 `ip -o` 的样子（`序号: 网卡 inet 地址`），好让 [parseAddresses] 拿到网卡名。 */
+    internal const val DARWIN_ADDR =
+        "ifconfig 2>/dev/null | awk '/^[a-z]/ { n = \$1; sub(/:\$/, \"\", n) } " +
+            "\$1 == \"inet\" && \$2 !~ /^(127|169\\.254)\\./ { print \"0: \" n \" inet \" \$2 }'"
+
+    /** BSD 的 ps 不认 `--sort`，`-r` / `-m` 分别按 CPU / 内存倒序；`ucomm` 是短名，`comm` 在 macOS 上是整条路径。 */
+    private const val DARWIN_PS =
+        "ps -Ao pid,pcpu,pmem,ucomm -r 2>/dev/null | head -n 8; " +
+            "ps -Ao pid,pcpu,pmem,ucomm -m 2>/dev/null | head -n 8"
+
     /** 系统信息段：两条命令都要，且瞬时可得，抽出来避免 [QUICK_COMMAND] 漂移出第二份写法。 */
-    private val SYSTEM_COMMAND: List<String> = listOf(
+    private fun systemCommand(distro: String): List<String> = listOf(
         "echo $MARKER_SYSTEM",
         "echo \"$PREFIX_KERNEL\$(uname -sr 2>/dev/null)\"",
         "echo \"$PREFIX_HOSTNAME\$(hostname 2>/dev/null || cat /proc/sys/kernel/hostname 2>/dev/null)\"",
+        distro,
+    )
+
+    private val SYSTEM_COMMAND = systemCommand(
         "grep -m1 '^PRETTY_NAME=' /etc/os-release 2>/dev/null || head -n 1 /etc/issue 2>/dev/null",
+    )
+
+    /** macOS 没有 os-release，`sw_vers` 拼成同样的 `PRETTY_NAME=` 行。 */
+    private val DARWIN_SYSTEM_COMMAND = systemCommand(
+        "echo \"PRETTY_NAME=\\\"\$(sw_vers -productName 2>/dev/null) \$(sw_vers -productVersion 2>/dev/null)\\\"\"",
     )
 
     /**
@@ -85,30 +177,51 @@ object HostFacts {
      * `ps` 那条**允许失败**：busybox 的 ps 不认 `-eo`，段空了就是没有进程数据，
      * 不能因此判定整次采集失败（见 [parse]）。
      */
-    val PROBE_COMMAND: String = (
-        PREAMBLE +
-            listOf(
-                "echo $MARKER_UPTIME1", "cat /proc/uptime 2>/dev/null",
-                "echo $MARKER_CPU1", "cat /proc/stat 2>/dev/null",
-                "echo $MARKER_NET1", "cat /proc/net/dev 2>/dev/null",
-                "sleep 1",
-                "echo $MARKER_UPTIME2", "cat /proc/uptime 2>/dev/null",
-                "echo $MARKER_CPU2", "cat /proc/stat 2>/dev/null",
-                "echo $MARKER_NET2", "cat /proc/net/dev 2>/dev/null",
-                "echo $MARKER_LOAD", "cat /proc/loadavg 2>/dev/null",
-                "echo $MARKER_MEM", "cat /proc/meminfo 2>/dev/null",
-                // -P 强制 POSIX 输出：不加它，长设备名会把一行拆成两行，解析必错
-                "echo $MARKER_DISK", "df -P -k 2>/dev/null",
-                "echo $MARKER_ADDR", ADDRESS_COMMAND,
-            ) +
+    val PROBE_COMMAND: String = byOs(
+        linux = listOf(
+            "echo $MARKER_UPTIME1", "cat /proc/uptime 2>/dev/null",
+            "echo $MARKER_CPU1", "cat /proc/stat 2>/dev/null",
+            "echo $MARKER_NET1", "cat /proc/net/dev 2>/dev/null",
+            "sleep 1",
+            "echo $MARKER_UPTIME2", "cat /proc/uptime 2>/dev/null",
+            "echo $MARKER_CPU2", "cat /proc/stat 2>/dev/null",
+            "echo $MARKER_NET2", "cat /proc/net/dev 2>/dev/null",
+            "echo $MARKER_LOAD", "cat /proc/loadavg 2>/dev/null",
+            "echo $MARKER_MEM", "cat /proc/meminfo 2>/dev/null",
+            // -P 强制 POSIX 输出：不加它，长设备名会把一行拆成两行，解析必错
+            "echo $MARKER_DISK", "df -P -k 2>/dev/null",
+            "echo $MARKER_ADDR", ADDRESS_COMMAND,
+        ) +
             SYSTEM_COMMAND +
             listOf(
                 "echo $MARKER_PS", PROCESS_COMMAND,
                 "echo $MARKER_GPU", GPU_COMMAND,
                 "echo $MARKER_DOCKER", CONTAINER_COMMAND,
                 "echo $MARKER_END",
-            )
-        ).joinToString("; ")
+            ),
+        // macOS 拿不到 CPU 的累计计数，改用 `top -l 2` 第二帧的区间占比（第一帧是开机以来的均值）。
+        // 它本身就要等 1 秒，正好顶替 `sleep 1`；CPU1 写一行全零当基准，差值算出来就是这个占比。
+        // GPU 与容器段不采：没有 nvidia-smi / sysfs，也没有 `timeout` 给 docker 兜底。
+        darwin = listOf(
+            "echo $MARKER_UPTIME1", "__lm_up",
+            "echo $MARKER_CPU1", "echo 'cpu 0 0 0 0'",
+            "echo $MARKER_NET1", DARWIN_NET,
+            "__lm_top=\$(top -l 2 -n 0 -s 1 2>/dev/null | grep 'CPU usage' | tail -n 1)",
+            "echo $MARKER_UPTIME2", "__lm_up",
+            "echo $MARKER_CPU2",
+            "echo \"\$__lm_top\" | awk '{ printf \"cpu %.0f 0 %.0f %.0f\\n\", \$3 * 100, \$5 * 100, \$7 * 100 }'",
+            "echo $MARKER_NET2", DARWIN_NET,
+            "echo $MARKER_LOAD", DARWIN_LOAD,
+            "echo $MARKER_MEM", DARWIN_MEM,
+            "echo $MARKER_DISK", DARWIN_DISK,
+            "echo $MARKER_ADDR", DARWIN_ADDR,
+        ) +
+            DARWIN_SYSTEM_COMMAND +
+            listOf(
+                "echo $MARKER_PS", DARWIN_PS,
+                "echo $MARKER_END",
+            ),
+    )
 
     /**
      * 首屏快采：只要瞬时可得、不依赖两次采样的那几项——负载 / 内存 / 磁盘 / 本机地址 /
@@ -121,21 +234,32 @@ object HostFacts {
      *
      * @see MonitorRepository.probeQuick
      */
-    val QUICK_COMMAND: String = (
-        PREAMBLE +
-            listOf(
-                "echo $MARKER_UPTIME1", "cat /proc/uptime 2>/dev/null",
-                "echo $MARKER_LOAD", "cat /proc/loadavg 2>/dev/null",
-                "echo $MARKER_MEM", "cat /proc/meminfo 2>/dev/null",
-                "echo $MARKER_DISK", "df -P -k 2>/dev/null",
-                "echo $MARKER_ADDR", ADDRESS_COMMAND,
-            ) +
+    val QUICK_COMMAND: String = byOs(
+        linux = listOf(
+            "echo $MARKER_UPTIME1", "cat /proc/uptime 2>/dev/null",
+            "echo $MARKER_LOAD", "cat /proc/loadavg 2>/dev/null",
+            "echo $MARKER_MEM", "cat /proc/meminfo 2>/dev/null",
+            "echo $MARKER_DISK", "df -P -k 2>/dev/null",
+            "echo $MARKER_ADDR", ADDRESS_COMMAND,
+        ) +
             SYSTEM_COMMAND +
             listOf(
                 "echo $MARKER_PS", PROCESS_COMMAND,
                 "echo $MARKER_END",
-            )
-        ).joinToString("; ")
+            ),
+        darwin = listOf(
+            "echo $MARKER_UPTIME1", "__lm_up",
+            "echo $MARKER_LOAD", DARWIN_LOAD,
+            "echo $MARKER_MEM", DARWIN_MEM,
+            "echo $MARKER_DISK", DARWIN_DISK,
+            "echo $MARKER_ADDR", DARWIN_ADDR,
+        ) +
+            DARWIN_SYSTEM_COMMAND +
+            listOf(
+                "echo $MARKER_PS", DARWIN_PS,
+                "echo $MARKER_END",
+            ),
+    )
 
     /**
      * 进程 Top。**发两路**：CPU 倒序一路、内存倒序一路，合并后按 pid 去重（见 [parseProcesses]）。
@@ -809,5 +933,7 @@ object HostFacts {
         "veth", "docker", "br-", "virbr", "vnet", "vmnet", "tun", "tap", "wg",
         "cni", "flannel", "cali", "cilium", "kube", "vxlan", "dummy", "ifb",
         "gre", "sit", "lxc", "lxdbr", "ovs", "zt", "tailscale", "utun", "nebula",
+        // macOS：AirDrop / 隔空投送用的点对点无线链路，流量不走出口
+        "awdl", "llw",
     )
 }

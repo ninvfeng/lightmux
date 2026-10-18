@@ -118,4 +118,16 @@ class HostPulseTest {
     fun noDiskStillParses() {
         assertNull(HostPulse.parse(output())!!.disk)
     }
+
+    @Test
+    fun macosCpuIsAvailableOnFirstSample() {
+        // macOS 没有累计计数，远端当场给出占比：CPU1 全零基准 + CPU2 占比
+        val stdout = output().replace(
+            "${HostFacts.MARKER_CPU1}\ncpu  100 0 100 800 0 0 0 0",
+            "${HostFacts.MARKER_CPU1}\ncpu 0 0 0 0\n${HostFacts.MARKER_CPU2}\ncpu 2500 0 0 7500",
+        )
+        val sample = HostPulse.parse(stdout)!!
+        assertEquals(0.25, HostPulse.reading(null, sample).cpu!!, 1e-9)
+        assertEquals(0.25, HostPulse.reading(sample, sample).cpu!!, 1e-9)
+    }
 }
