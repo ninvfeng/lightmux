@@ -84,6 +84,11 @@ data class Transfer(
     val totalBytes: Long = 0L,
     val status: TransferStatus = TransferStatus.QUEUED,
     val error: String? = null,
+    /** 同一次多选共用批次，UI 据此只自动展开一次，并合计这批已完成与排队中的文件。 */
+    val batchId: String = id,
+    val batchSize: Int = 1,
+    /** 队列未排空期间追加的批次合并汇总，前一批完成时总进度不会突然倒退。 */
+    val groupId: String = batchId,
 ) {
     val active: Boolean get() = !status.finished
 

@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
@@ -32,6 +33,9 @@ import androidx.compose.material.icons.filled.DriveFolderUpload
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Terminal
@@ -39,6 +43,7 @@ import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.InputChip
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -64,6 +69,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -75,12 +81,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import net.lighttools.lightmux.R
+import net.lighttools.lightmux.sftp.ImagePreview
 import net.lighttools.lightmux.sftp.RemoteEntry
 import net.lighttools.lightmux.sftp.RemoteFileType
 import net.lighttools.lightmux.sftp.SftpPath
 import net.lighttools.lightmux.sftp.Transfer
 import net.lighttools.lightmux.sftp.TransferDirection
 import net.lighttools.lightmux.sftp.TransferQueue
+import net.lighttools.lightmux.sftp.TransferSummary
 import net.lighttools.lightmux.sftp.TransferStatus
 import net.lighttools.lightmux.ui.common.BackButton
 import net.lighttools.lightmux.ui.common.ConfirmDialog
@@ -109,12 +117,14 @@ fun FilesScreen(
     vm: FilesViewModel,
     queue: TransferQueue,
     onBack: () -> Unit,
+    onOpenFile: (path: String) -> Unit,
     onEditFile: (path: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     FilesContent(
         vm = vm,
         queue = queue,
+        onOpenFile = onOpenFile,
         onEditFile = onEditFile,
         // 主页进来的这条路没有终端可送，那一项菜单不出现，别给一个点了没反应的入口
         onSendToTerminal = null,
@@ -153,6 +163,7 @@ fun FilesScreen(
 fun FilesSheet(
     vm: FilesViewModel,
     queue: TransferQueue,
+    onOpenFile: (path: String) -> Unit,
     onEditFile: (path: String) -> Unit,
     onSendToTerminal: (path: String) -> Unit,
     onDismiss: () -> Unit,
@@ -161,6 +172,7 @@ fun FilesSheet(
         FilesContent(
             vm = vm,
             queue = queue,
+            onOpenFile = onOpenFile,
             onEditFile = onEditFile,
             onSendToTerminal = onSendToTerminal,
             // 撑满可用高度，「半屏档」才存在：内容不够高时 M3 直接跳过 PartiallyExpanded，
@@ -194,6 +206,7 @@ fun FilesSheet(
 private fun FilesContent(
     vm: FilesViewModel,
     queue: TransferQueue,
+    onOpenFile: (path: String) -> Unit,
     onEditFile: (path: String) -> Unit,
     onSendToTerminal: ((path: String) -> Unit)?,
     modifier: Modifier = Modifier,
@@ -303,7 +316,18 @@ private fun FilesContent(
             onGo = vm::goTo,
             onCopy = { copyToClipboard(context, state.path, copied) },
             onSendToTerminal = onSendToTerminal?.let { send -> { send(state.path) } },
+            bookmarked = state.path in vm.bookmarks,
+            canBookmark = state.loaded && !state.loading,
+            onToggleBookmark = { vm.toggleBookmark(state.path) },
         )
+        if (vm.bookmarks.isNotEmpty()) {
+            BookmarkBar(
+                paths = vm.bookmarks.sorted(),
+                currentPath = state.path,
+                onGo = vm::goTo,
+                onRemove = vm::toggleBookmark,
+            )
+        }
         HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
 
         Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -330,7 +354,7 @@ private fun FilesContent(
                     items(entries, key = { it.path }) { entry ->
                         EntryRow(
                             entry = entry,
-                            onClick = { vm.open(entry) { onEditFile(it.path) } },
+                            onClick = { vm.open(entry) { onOpenFile(it.path) } },
                             onCopyPath = { copyToClipboard(context, entry.path, copied) },
                             onSendToTerminal = onSendToTerminal?.let { send -> { send(entry.path) } },
                             onDownload = {
@@ -338,6 +362,9 @@ private fun FilesContent(
                                 downloadPicker.launch(entry.name)
                             },
                             onEdit = { onEditFile(entry.path) },
+                            onPreview = { onOpenFile(entry.path) },
+                            bookmarked = entry.path in vm.bookmarks,
+                            onToggleBookmark = { vm.toggleBookmark(entry.path) },
                             onRename = { pendingRename = entry },
                             onDelete = { pendingDelete = entry },
                         )
@@ -443,6 +470,9 @@ private fun PathBar(
     onGo: (String) -> Unit,
     onCopy: () -> Unit,
     onSendToTerminal: (() -> Unit)?,
+    bookmarked: Boolean,
+    canBookmark: Boolean,
+    onToggleBookmark: () -> Unit,
 ) {
     // 最后一级就是当前目录，跳过去是原地不动，不列
     val ancestors = crumbs.dropLast(1)
@@ -506,6 +536,14 @@ private fun PathBar(
             }
 
             CompactIconButton(
+                icon = if (bookmarked) Icons.Default.Star else Icons.Default.StarBorder,
+                contentDescription = stringResource(
+                    if (bookmarked) R.string.files_bookmark_remove else R.string.files_bookmark_add,
+                ),
+                onClick = onToggleBookmark,
+                enabled = canBookmark,
+            )
+            CompactIconButton(
                 icon = Icons.Default.ContentCopy,
                 contentDescription = stringResource(R.string.files_copy_path),
                 onClick = onCopy,
@@ -517,6 +555,39 @@ private fun PathBar(
                     onClick = send,
                 )
             }
+        }
+    }
+}
+
+/** 完整路径区分同名目录；点击路径直达，移除入口单独放在末尾。 */
+@Composable
+private fun BookmarkBar(
+    paths: List<String>,
+    currentPath: String,
+    onGo: (String) -> Unit,
+    onRemove: (String) -> Unit,
+) {
+    LazyRow(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
+    ) {
+        item {
+            Text(stringResource(R.string.files_bookmarks), style = MaterialTheme.typography.labelSmall)
+        }
+        items(paths, key = { it }) { path ->
+            InputChip(
+                selected = path == currentPath,
+                onClick = { onGo(path) },
+                label = { Text(path, maxLines = 1) },
+                trailingIcon = {
+                    IconButton(onClick = { onRemove(path) }, modifier = Modifier.size(28.dp)) {
+                        Icon(Icons.Default.Close, stringResource(R.string.files_bookmark_remove),
+                            modifier = Modifier.size(16.dp))
+                    }
+                },
+            )
         }
     }
 }
@@ -555,6 +626,9 @@ private fun EntryRow(
     onSendToTerminal: (() -> Unit)?,
     onDownload: () -> Unit,
     onEdit: () -> Unit,
+    onPreview: () -> Unit,
+    bookmarked: Boolean,
+    onToggleBookmark: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -586,6 +660,20 @@ private fun EntryRow(
                         menuOpen = false
                         send()
                     },
+                )
+            }
+            if (entry.isDirectory) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(
+                        if (bookmarked) R.string.files_bookmark_remove else R.string.files_bookmark_add,
+                    )) },
+                    onClick = { menuOpen = false; onToggleBookmark() },
+                )
+            }
+            if (!entry.isDirectory && ImagePreview.supports(entry.path)) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.files_image_preview)) },
+                    onClick = { menuOpen = false; onPreview() },
                 )
             }
             HorizontalDivider()
@@ -719,13 +807,10 @@ private fun NameDialog(
 }
 
 /**
- * 底部传输条。默认折叠成一行摘要，点开才看细节——传输是后台的事，
- * 不该在浏览时占掉半屏。
- *
- * 收 `State` 而不是收现成的列表：进度每秒变几十次，让调用方把值读出来再传进来，
- * 等于把整个文件页拖进这个刷新频率（见 [FilesContent]）。这里是唯一真的要看进度的地方，
- * 订阅就落在这一层。
+ * 订阅下沉到进度区域，避免每个数据块都触发整个目录列表重组。
+ * 多选批次只自动展开一次；用户下滑关闭后保持收起，下一批再自动展开。
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TransferBar(
     transfers: State<List<Transfer>>,
@@ -733,39 +818,103 @@ private fun TransferBar(
     onClear: () -> Unit,
 ) {
     val list = transfers.value
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    var seenBatches by rememberSaveable { mutableStateOf(listOf<String>()) }
+    val activeTransfers = list.filter { it.active }
+    val autoOpenKeys = activeTransfers.filter { it.batchSize > 1 }.map { "batch:${it.batchId}" } +
+        activeTransfers.groupBy { it.groupId }.filterValues { it.size > 1 }.keys.map { "group:$it" }
+    LaunchedEffect(autoOpenKeys.distinct(), list.isEmpty()) {
+        if (list.isEmpty()) {
+            expanded = false
+            seenBatches = emptyList()
+        } else if (autoOpenKeys.any { it !in seenBatches }) {
+            expanded = true
+            seenBatches = (seenBatches + autoOpenKeys).distinct()
+        }
+    }
     if (list.isEmpty()) return
-    var expanded by remember { mutableStateOf(false) }
     val active = list.count { it.active }
+    val summary = TransferSummary.from(list)
 
     Surface(tonalElevation = 3.dp) {
         Column(Modifier.fillMaxWidth()) {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp),
+                modifier = Modifier.fillMaxWidth().clickable { expanded = true }
+                    .padding(start = 16.dp, end = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = if (active > 0) stringResource(R.string.files_transfers_active, active)
-                    else stringResource(R.string.files_transfers_idle),
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.labelLarge,
-                )
+                Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
+                    Text(
+                        text = if (active > 0) stringResource(R.string.files_transfers_active, active)
+                        else stringResource(R.string.files_transfers_idle),
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                    TransferSummaryText(summary)
+                }
                 if (active == 0) {
                     TextButton(onClick = onClear) { Text(stringResource(R.string.files_transfers_clear)) }
                 }
-                IconButton(onClick = { expanded = !expanded }) {
-                    Icon(
-                        imageVector = if (expanded) Icons.Default.ExpandMore else Icons.Default.ExpandLess,
-                        contentDescription = stringResource(R.string.files_transfers),
-                    )
+                IconButton(onClick = { expanded = true }) {
+                    Icon(Icons.Default.ExpandLess, stringResource(R.string.files_transfers_expand))
                 }
             }
-            if (expanded) {
-                list.forEach { transfer ->
-                    TransferRow(transfer = transfer, onCancel = { onCancel(transfer.id) })
+            OverallProgress(summary, active > 0)
+        }
+    }
+
+    if (expanded) {
+        ModalBottomSheet(onDismissRequest = { expanded = false }) {
+            // 内容撑满可用高度，M3 才会提供默认半屏档，并允许上拉全屏、下滑关闭。
+            Column(Modifier.fillMaxHeight()) {
+                Row(
+                    Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(stringResource(R.string.files_transfers), style = MaterialTheme.typography.titleMedium)
+                        TransferSummaryText(summary)
+                    }
+                    TextButton(onClick = onClear, enabled = active == 0) {
+                        Text(stringResource(R.string.files_transfers_clear))
+                    }
+                    IconButton(onClick = { expanded = false }) {
+                        Icon(Icons.Default.ExpandMore, stringResource(R.string.files_transfers_collapse))
+                    }
+                }
+                OverallProgress(summary, active > 0)
+                val latestGroup = list.last().groupId
+                val details = list.sortedByDescending { it.groupId == latestGroup }
+                LazyColumn(Modifier.weight(1f).fillMaxWidth().navigationBarsPadding()) {
+                    items(details, key = { it.id }) { transfer ->
+                        TransferRow(transfer = transfer, onCancel = { onCancel(transfer.id) })
+                    }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun TransferSummaryText(summary: TransferSummary) {
+    val bytes = if (summary.ratio == null) SftpPath.humanSize(summary.transferredBytes)
+    else stringResource(R.string.files_transfer_progress,
+        SftpPath.humanSize(summary.transferredBytes), SftpPath.humanSize(summary.totalBytes)) +
+        " · ${(summary.ratio * 100).toInt()}%"
+    Text(
+        stringResource(R.string.files_transfers_overall, summary.completed, summary.count, bytes),
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
+}
+
+@Composable
+private fun OverallProgress(summary: TransferSummary, active: Boolean) {
+    val ratio = summary.ratio
+    val modifier = Modifier.fillMaxWidth().height(3.dp)
+    if (ratio != null) LinearProgressIndicator(progress = { ratio }, modifier = modifier)
+    else if (active) LinearProgressIndicator(modifier)
 }
 
 @Composable
@@ -815,7 +964,9 @@ private fun TransferRow(transfer: Transfer, onCancel: () -> Unit) {
 @Composable
 private fun Transfer.statusText(): String = when (status) {
     TransferStatus.QUEUED -> stringResource(R.string.files_transfer_queued, hostName)
-    TransferStatus.RUNNING -> stringResource(
+    TransferStatus.RUNNING -> if (totalBytes <= 0) {
+        stringResource(R.string.files_transfer_unknown_progress, SftpPath.humanSize(transferredBytes))
+    } else stringResource(
         R.string.files_transfer_progress,
         SftpPath.humanSize(transferredBytes),
         SftpPath.humanSize(totalBytes),
@@ -829,7 +980,7 @@ private fun Transfer.statusText(): String = when (status) {
 private fun RemoteEntry.icon(): ImageVector = when (type) {
     RemoteFileType.DIRECTORY -> Icons.Default.Folder
     RemoteFileType.SYMLINK -> Icons.Default.Link
-    else -> Icons.AutoMirrored.Filled.InsertDriveFile
+    else -> if (ImagePreview.supports(path)) Icons.Default.Image else Icons.AutoMirrored.Filled.InsertDriveFile
 }
 
 /** 「大小 · 修改时间」。目录不显示大小——SFTP 给的是目录项本身的字节数，不是里面内容的总和。 */

@@ -82,23 +82,29 @@ class TransferQueue(
         }
     }
 
-    /** 上传一个 SAF 选中的文件到 [remoteDir]。只由 [submit] 调——外部入口一律先过预检。 */
-    private fun upload(host: Host, uri: Uri, remoteDir: String) {
+    /** 整批先取齐元数据再一起入队，UI 不会把尚在查询大小的后续文件漏出总进度。 */
+    private fun upload(host: Host, picked: List<Picked>, remoteDir: String) {
+        if (picked.isEmpty()) return
         scope.launch(Dispatchers.Main.immediate) {
             intake.withLock {
-                val (name, size) = withContext(Dispatchers.IO) {
-                    (displayName(uri) ?: fallbackName()) to sizeOf(uri)
+                val sources = withContext(Dispatchers.IO) {
+                    picked.map { it to sizeOf(it.uri) }
                 }
-                val transfer = newTransfer(host, TransferDirection.UPLOAD, name, size)
-                enqueue(transfer) { handle ->
-                    val source = object : LocalSource {
-                        override val name: String = name
-                        override val length: Long = transfer.totalBytes
-                        override fun open(): InputStream = resolver.openInputStream(uri)
-                            ?.also { handle.stream.set(it) }
-                            ?: throw IOException("cannot open $uri")
+                val batchId = UUID.randomUUID().toString()
+                sources.forEach { (pick, size) ->
+                    val name = pick.name ?: fallbackName()
+                    val transfer = newTransfer(host, TransferDirection.UPLOAD, name, size)
+                        .copy(batchId = batchId, batchSize = sources.size, groupId = batchId)
+                    enqueue(transfer) { handle ->
+                        val source = object : LocalSource {
+                            override val name: String = name
+                            override val length: Long = transfer.totalBytes
+                            override fun open(): InputStream = resolver.openInputStream(pick.uri)
+                                ?.also { handle.stream.set(it) }
+                                ?: throw IOException("cannot open ${pick.uri}")
+                        }
+                        repository.upload(host, source, SftpPath.join(remoteDir, name), progress(transfer.id, handle))
                     }
-                    repository.upload(host, source, SftpPath.join(remoteDir, name), progress(transfer.id, handle))
                 }
             }
         }
@@ -137,7 +143,7 @@ class TransferQueue(
         when (plan) {
             // name 为 null 时 `null in Set<String>` 恒 false，正好就是「取不到名字的一律直传」
             is UploadPlan.Files ->
-                plan.picked.filterNot { it.name in skip }.forEach { upload(plan.host, it.uri, plan.remoteDir) }
+                upload(plan.host, plan.picked.filterNot { it.name in skip }, plan.remoteDir)
 
             is UploadPlan.Folder -> {
                 val tree = plan.tree.without(skip)
@@ -194,7 +200,10 @@ class TransferQueue(
 
     private fun enqueue(transfer: Transfer, handle: Handle = Handle(), body: suspend (Handle) -> Unit) {
         handles[transfer.id] = handle
-        _transfers.update { it + transfer }
+        _transfers.update { list ->
+            val groupId = list.lastOrNull { it.active || it.batchId == transfer.batchId }?.groupId ?: transfer.groupId
+            list + transfer.copy(groupId = groupId)
+        }
 
         handle.job = scope.launch {
             try {

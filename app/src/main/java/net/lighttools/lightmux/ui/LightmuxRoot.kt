@@ -30,6 +30,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import kotlinx.coroutines.launch
 import net.lighttools.lightmux.BuildConfig
 import net.lighttools.lightmux.LightmuxApp
+import net.lighttools.lightmux.sftp.ImagePreview
 import net.lighttools.lightmux.sftp.SftpPath
 import net.lighttools.lightmux.ui.common.AuthChallengeDialog
 import net.lighttools.lightmux.ui.common.LocalSwipeOpenGuard
@@ -41,6 +42,7 @@ import net.lighttools.lightmux.ui.files.FileEditScreen
 import net.lighttools.lightmux.ui.files.FileEditViewModel
 import net.lighttools.lightmux.ui.files.FilesScreen
 import net.lighttools.lightmux.ui.files.FilesSheet
+import net.lighttools.lightmux.ui.files.ImagePreviewScreen
 import net.lighttools.lightmux.ui.files.FilesViewModel
 import net.lighttools.lightmux.ui.forward.ForwardScreen
 import net.lighttools.lightmux.ui.forward.ForwardSheet
@@ -135,12 +137,12 @@ fun LightmuxRoot() {
     // 按地址分键：换个端口就是另一页，VM 里那份地址与进度不能接着上一页用
     val webVm = webUrl?.let { url -> rememberVm("webPane:$url") { WebViewModel(url) } }
 
-    // 跳去别的页面就当用户不要面板了。只有「去编辑器」这一条路留着文件面板——那是面板自己发起的跳转，
-    // 存完退回来该还在原地。
+    // 跳去别的页面就当用户不要面板了。编辑器和图片预览保留文件面板，
+    // 都是面板自己发起的跳转，返回时该还在原目录。
     LaunchedEffect(screen) {
         val sessionId = (screen as? Screen.Terminal)?.sessionId
         filesSheet?.let { open ->
-            if (screen !is Screen.FileEdit && sessionId != open) filesSheet = null
+            if (screen !is Screen.FileEdit && screen !is Screen.ImagePreview && sessionId != open) filesSheet = null
         }
         if (forwardSheet != null && sessionId != forwardSheet) forwardSheet = null
         // 网页只在终端页上盖着（那是唯一能把它划出来的地方）。收起来而不是关掉：它还在后台。
@@ -202,13 +204,14 @@ fun LightmuxRoot() {
         }
     }
 
-    // 文件页、面板与编辑器共用浏览通道；这三处都不用它了，通道就该关。
-    // 放在这里而不是页面的 onDispose：进编辑器时文件页会被销毁，那样会白白断一次连接再重连。
+    // 文件页、面板、编辑器与图片预览共用浏览通道；这些页面都不用它了，通道就该关。
+    // 放在这里而不是页面的 onDispose：打开文件时浏览页会被销毁，不能白白断一次连接再重连。
     val fileHosts = remember(nav.stack, sheetSession) {
         nav.stack.mapNotNullTo(mutableSetOf()) { screen ->
             when (screen) {
                 is Screen.Files -> screen.hostId
                 is Screen.FileEdit -> screen.hostId
+                is Screen.ImagePreview -> screen.hostId
                 else -> null
             }
         }.apply { sheetSession?.let { add(it.host.id) } }
@@ -311,6 +314,7 @@ fun LightmuxRoot() {
                         app.transferQueue,
                         screen.hostId,
                         screen.path,
+                        app.fileBookmarkStore,
                     )
                 }
                 // 在子目录里，返回 = 回上一级；回到起点才让中央栈关掉页面（文件管理器的通用预期）
@@ -322,9 +326,21 @@ fun LightmuxRoot() {
                     vm = vm,
                     queue = app.transferQueue,
                     onBack = { if (!vm.goUp()) nav.pop() },
+                    onOpenFile = { path ->
+                        nav.push(if (ImagePreview.supports(path)) Screen.ImagePreview(screen.hostId, path)
+                        else Screen.FileEdit(screen.hostId, path))
+                    },
                     onEditFile = { nav.push(Screen.FileEdit(screen.hostId, it)) },
                 )
             }
+
+            is Screen.ImagePreview -> ImagePreviewScreen(
+                repository = app.sftpRepository,
+                hostStore = app.hostStore,
+                hostId = screen.hostId,
+                path = screen.path,
+                onBack = { nav.pop() },
+            )
 
             is Screen.FileEdit -> {
                 val vm = rememberVm("fileEdit:${screen.hostId}:${screen.path}") {
@@ -402,18 +418,22 @@ fun LightmuxRoot() {
             )
         }
 
-        // 面板叠在终端上，所以只在那个终端页上画：跳去编辑器时先收起来（它是独立窗口，
-        // 不收会盖在编辑器上面），退回来 filesSheet 还在，原样再弹一次。
+        // 面板叠在终端上，只在所属终端页上画；打开编辑器或图片预览时先收起，
+        // 避免独立窗口盖住新页面，退回来 filesSheet 还在，原样再弹一次。
         if (sheetSession != null && (screen as? Screen.Terminal)?.sessionId == filesSheet) {
             val hostId = sheetSession.host.id
             // 和整页文件浏览共用同一个 VM（key 相同）：两边看的是同一台主机的同一次浏览，
             // 各存一份的话「刚才翻到哪」会分叉
             val vm = rememberVm("files:$hostId") {
-                FilesViewModel(app.sftpRepository, app.hostStore, app.transferQueue, hostId, "")
+                FilesViewModel(app.sftpRepository, app.hostStore, app.transferQueue, hostId, "", app.fileBookmarkStore)
             }
             FilesSheet(
                 vm = vm,
                 queue = app.transferQueue,
+                onOpenFile = { path ->
+                    nav.push(if (ImagePreview.supports(path)) Screen.ImagePreview(hostId, path)
+                    else Screen.FileEdit(hostId, path))
+                },
                 onEditFile = { nav.push(Screen.FileEdit(hostId, it)) },
                 onSendToTerminal = { path ->
                     // 加引号是必须的：带空格的文件名会被 shell 拆成两个参数，

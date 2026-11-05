@@ -222,6 +222,15 @@
     <string name="monitor_failed">Could not read metrics: %1$s</string>
 
     <!-- 文件页 -->
+    <string name="files_bookmarks">Favorite folders</string>
+    <string name="files_bookmark_add">Add to favorite folders</string>
+    <string name="files_bookmark_remove">Remove from favorite folders</string>
+    <string name="files_image_preview">Preview image</string>
+    <string name="files_image_reset">Fit image to screen</string>
+    <string name="files_image_hint">Pinch to zoom · Double-tap to zoom or reset · GIF shows the first frame</string>
+    <string name="files_image_too_large">This image exceeds the %1$s preview limit. Download it to view.</string>
+    <string name="files_image_unsupported">This image is damaged or its format is not supported. Download it to view.</string>
+    <string name="files_image_failed">Could not preview this image: %1$s</string>
     <string name="files_empty">This folder is empty</string>
     <string name="files_failed">Could not list this folder: %1$s</string>
     <string name="files_name">Name</string>
@@ -252,12 +261,16 @@
 
     <!-- 传输队列 -->
     <string name="files_transfers">Transfers</string>
+    <string name="files_transfers_expand">Show transfer details</string>
+    <string name="files_transfers_collapse">Collapse transfer details</string>
+    <string name="files_transfers_overall">%1$d / %2$d completed · %3$s</string>
     <string name="files_transfers_active">Transferring · %1$d</string>
     <string name="files_transfers_idle">Transfers</string>
     <string name="files_transfers_clear">Clear</string>
     <string name="files_transfer_cancel">Cancel</string>
     <string name="files_transfer_queued">Queued · %1$s</string>
     <string name="files_transfer_progress">%1$s / %2$s</string>
+    <string name="files_transfer_unknown_progress">Transferred %1$s</string>
     <string name="files_transfer_done">Done</string>
     <string name="files_transfer_cancelled">Cancelled</string>
     <string name="files_transfer_failed">Failed: %1$s</string>

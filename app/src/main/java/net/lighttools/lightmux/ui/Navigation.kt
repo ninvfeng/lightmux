@@ -38,6 +38,9 @@ sealed interface Screen {
      */
     data class Files(val hostId: String, val path: String) : Screen
 
+    /** 图片预览与编辑器共用文件浏览连接，返回时回到原目录。 */
+    data class ImagePreview(val hostId: String, val path: String) : Screen
+
     /** 小文本文件的应用内编辑 */
     data class FileEdit(val hostId: String, val path: String) : Screen
 
@@ -122,7 +125,7 @@ class Navigator(initial: List<Screen> = listOf(Screen.Home)) {
                         // 网页只恢复地址，重新加载一遍。翻过的历史找不回来，但那比把用户
                         // 弹回主页强得多——何况本地端口页刷一下就是原样
                         is Screen.Web -> "web:${screen.url}"
-                        // 终端与文件编辑不恢复
+                        // 终端、文件编辑与图片预览不恢复
                         else -> null
                     }
                 }

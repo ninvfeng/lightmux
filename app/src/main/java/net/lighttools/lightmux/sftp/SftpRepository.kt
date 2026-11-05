@@ -1,5 +1,7 @@
 package net.lighttools.lightmux.sftp
 
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -171,6 +173,21 @@ class SftpRepository(private val sessions: SessionManager) {
     /** 删除。目录递归删——SFTP 的 `rmdir` 只删空目录，不自己走一遍的话用户点了没反应。 */
     suspend fun delete(host: Host, entry: RemoteEntry) = onLane(host, Lane.BROWSE) { client ->
         client.deleteRecursively(entry.path, entry.type)
+    }
+
+    /** null 表示图片超限，读取中也检查长度与取消，关闭预览后不继续耗流量。 */
+    suspend fun readImage(host: Host, path: String): ByteArray? {
+        val context = currentCoroutineContext()
+        return onLane(host, Lane.BROWSE) { client ->
+            val size = client.stat(path).size
+            if (size > ImagePreview.MAX_BYTES) return@onLane null
+            client.open(path, EnumSet.of(OpenMode.READ)).use { file ->
+                ImagePreview.readBounded(size) { offset, buffer, length ->
+                    context.ensureActive()
+                    file.read(offset, buffer, 0, length)
+                }
+            }
+        }
     }
 
     /** 读小文本文件给应用内编辑器。超限与二进制**不抛异常**，作为结果返回，UI 才好分别提示。 */

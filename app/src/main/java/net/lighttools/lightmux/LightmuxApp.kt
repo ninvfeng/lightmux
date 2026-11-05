@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import net.lighttools.lightmux.data.FileBookmarkStore
 import net.lighttools.lightmux.data.ForwardStore
 import net.lighttools.lightmux.data.Host
 import net.lighttools.lightmux.data.HostStore
@@ -58,6 +59,8 @@ class LightmuxApp : Application() {
      */
     fun hostsBlocking(): List<Host> =
         hostCache.ifEmpty { runBlocking { hostStore.snapshot() }.also { hostCache = it } }
+
+    val fileBookmarkStore: FileBookmarkStore by lazy { FileBookmarkStore(this) }
 
     val settingsStore: SettingsStore by lazy { SettingsStore(this) }
 

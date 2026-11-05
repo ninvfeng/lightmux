@@ -45,7 +45,7 @@ to jump to another session.
 - **A quick bar that fits your hands**: `Ctrl` `Esc` `Tab` and arrows, add / remove / drag to reorder,
   and turn a command or a combo like `Ctrl+B d` into a single button
 - **Host monitor**: CPU, memory, disk, network, processes and containers at a glance
-- **Files**: browse, upload, download, rename, delete — and edit small text files on the phone
+- **Files**: browse, upload, download, rename, delete, and edit small text files; zoomable image previews, per-host favorite folders, and multi-file transfer details that open in a half-screen sheet with overall progress when collapsed
 - **Port forwarding**: bring a web service on the server (say port `3000`) to the phone and open it
   inside the app. When an address like `http://127.0.0.1:3000` shows up in the terminal, one tap opens it
 - **Secure**: passwords and keys are encrypted with the system keystore; server fingerprints are

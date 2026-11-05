@@ -8,7 +8,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
+import net.lighttools.lightmux.data.FileBookmarkStore
 import net.lighttools.lightmux.data.Host
 import net.lighttools.lightmux.data.HostStore
 import net.lighttools.lightmux.sftp.RemoteEntry
@@ -47,7 +49,23 @@ class FilesViewModel(
     private val queue: TransferQueue,
     private val hostId: String,
     private val initialPath: String,
+    private val bookmarkStore: FileBookmarkStore,
 ) : ViewModel() {
+
+    var bookmarks by mutableStateOf<Set<String>>(emptySet())
+        private set
+
+    fun toggleBookmark(path: String) {
+        viewModelScope.launch {
+            try {
+                bookmarkStore.toggle(hostId, path)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                actionError = e.describe()
+            }
+        }
+    }
 
     var host by mutableStateOf<Host?>(null)
         private set
@@ -62,6 +80,14 @@ class FilesViewModel(
     /** 操作反馈（删除失败、改名失败…）。一次性，展示完就清。 */
     var actionError by mutableStateOf<String?>(null)
         private set
+
+    init {
+        viewModelScope.launch {
+            bookmarkStore.paths(hostId)
+                .catch { actionError = it.describe() }
+                .collect { bookmarks = it }
+        }
+    }
 
     /**
      * 正等着「存到哪」的那一条：点下载后要先去系统的文件选择器挑落点，选完才知道往哪写。
@@ -193,7 +219,7 @@ class FilesViewModel(
         actionError = null
     }
 
-    /** 点一条：目录进去，链接先问服务端指向哪，普通文件交给调用方（去编辑器）。 */
+    /** 点一条：目录进去，链接先问服务端指向哪，普通文件交给调用方选择预览或编辑。 */
     fun open(entry: RemoteEntry, onFile: (RemoteEntry) -> Unit) {
         when (entry.type) {
             RemoteFileType.DIRECTORY -> enter(entry.path)
