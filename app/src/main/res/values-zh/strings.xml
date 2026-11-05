@@ -221,6 +221,9 @@
     <string name="files_image_preview">图片预览</string>
     <string name="files_image_reset">图片适应屏幕</string>
     <string name="files_image_hint">双指缩放 · 双击放大或复原 · GIF 显示首帧</string>
+    <string name="files_image_gallery_hint">左右滑动切换图片 · 双指缩放 · GIF 显示首帧</string>
+    <string name="files_image_zoomed_hint">拖动查看细节 · 双击复原后可左右翻页</string>
+    <string name="files_image_position">第 %1$d / %2$d 张</string>
     <string name="files_image_too_large">图片超过 %1$s 的预览上限，请下载后查看</string>
     <string name="files_image_unsupported">图片已损坏或格式暂不支持，请下载后查看</string>
     <string name="files_image_failed">图片预览失败：%1$s</string>

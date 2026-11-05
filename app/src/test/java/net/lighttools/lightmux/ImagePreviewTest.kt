@@ -1,10 +1,47 @@
 package net.lighttools.lightmux
 
 import net.lighttools.lightmux.sftp.ImagePreview
+import net.lighttools.lightmux.sftp.RemoteEntry
+import net.lighttools.lightmux.sftp.RemoteFileType
 import org.junit.Assert.*
 import org.junit.Test
 
 class ImagePreviewTest {
+    private fun entry(path: String, type: RemoteFileType = RemoteFileType.FILE) = RemoteEntry(
+        name = path.substringAfterLast('/'), path = path, type = type,
+        sizeBytes = 10, modifiedEpochSeconds = 0, permissions = 0,
+    )
+
+    @Test fun `gallery preserves the visible directory order and ignores non images`() {
+        val entries = listOf(entry("/photos/b.png"), entry("/photos/readme.txt"), entry("/photos/a.JPG"))
+        assertEquals(listOf("/photos/b.png", "/photos/a.JPG"), ImagePreview.gallery("/photos/a.JPG", entries))
+    }
+
+    @Test fun `gallery excludes directories special files and images from other directories`() {
+        val entries = listOf(
+            entry("/photos/folder.jpg", RemoteFileType.DIRECTORY),
+            entry("/photos/socket.jpg", RemoteFileType.OTHER),
+            entry("/elsewhere/other.jpg"),
+            entry("/photos/main.jpg"),
+            entry("/photos/link.png", RemoteFileType.SYMLINK),
+            entry("/photos/main.jpg"),
+        )
+        assertEquals(listOf("/photos/main.jpg", "/photos/link.png"), ImagePreview.gallery("/photos/main.jpg", entries))
+    }
+
+    @Test fun `missing clicked image falls back to itself instead of opening a different file`() {
+        assertEquals(listOf("/photos/missing.jpg"),
+            ImagePreview.gallery("/photos/missing.jpg", listOf(entry("/photos/other.jpg"))))
+        assertEquals(listOf("/photos/only.jpg"), ImagePreview.gallery("/photos/only.jpg", emptyList()))
+    }
+
+    @Test fun `gallery uses the caller visibility selection without adding hidden images`() {
+        val visible = listOf(entry("/photos/main.jpg"))
+        val withHidden = visible + entry("/photos/.hidden.png")
+        assertEquals(listOf("/photos/main.jpg"), ImagePreview.gallery("/photos/main.jpg", visible))
+        assertEquals(listOf("/photos/main.jpg", "/photos/.hidden.png"), ImagePreview.gallery("/photos/main.jpg", withHidden))
+    }
+
     @Test fun `recognizes supported image extensions without confusing directory names`() {
         for (name in listOf("photo.JPG", "photo.jpeg", "图.png", "a.webp", "a.GIF", "a.bmp")) {
             assertTrue(name, ImagePreview.supports("/images/$name"))

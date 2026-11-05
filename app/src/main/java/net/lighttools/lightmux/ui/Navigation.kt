@@ -39,7 +39,11 @@ sealed interface Screen {
     data class Files(val hostId: String, val path: String) : Screen
 
     /** 图片预览与编辑器共用文件浏览连接，返回时回到原目录。 */
-    data class ImagePreview(val hostId: String, val path: String) : Screen
+    data class ImagePreview(
+        val hostId: String,
+        val path: String,
+        val images: List<String> = listOf(path),
+    ) : Screen
 
     /** 小文本文件的应用内编辑 */
     data class FileEdit(val hostId: String, val path: String) : Screen

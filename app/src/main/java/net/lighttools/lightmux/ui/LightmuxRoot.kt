@@ -327,8 +327,9 @@ fun LightmuxRoot() {
                     queue = app.transferQueue,
                     onBack = { if (!vm.goUp()) nav.pop() },
                     onOpenFile = { path ->
-                        nav.push(if (ImagePreview.supports(path)) Screen.ImagePreview(screen.hostId, path)
-                        else Screen.FileEdit(screen.hostId, path))
+                        nav.push(if (ImagePreview.supports(path)) Screen.ImagePreview(
+                            screen.hostId, path, ImagePreview.gallery(path, vm.visibleEntries),
+                        ) else Screen.FileEdit(screen.hostId, path))
                     },
                     onEditFile = { nav.push(Screen.FileEdit(screen.hostId, it)) },
                 )
@@ -339,6 +340,7 @@ fun LightmuxRoot() {
                 hostStore = app.hostStore,
                 hostId = screen.hostId,
                 path = screen.path,
+                images = screen.images,
                 onBack = { nav.pop() },
             )
 
@@ -431,8 +433,9 @@ fun LightmuxRoot() {
                 vm = vm,
                 queue = app.transferQueue,
                 onOpenFile = { path ->
-                    nav.push(if (ImagePreview.supports(path)) Screen.ImagePreview(hostId, path)
-                    else Screen.FileEdit(hostId, path))
+                    nav.push(if (ImagePreview.supports(path)) Screen.ImagePreview(
+                        hostId, path, ImagePreview.gallery(path, vm.visibleEntries),
+                    ) else Screen.FileEdit(hostId, path))
                 },
                 onEditFile = { nav.push(Screen.FileEdit(hostId, it)) },
                 onSendToTerminal = { path ->

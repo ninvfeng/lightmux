@@ -13,6 +13,17 @@ object ImagePreview {
     fun supports(path: String): Boolean =
         SftpPath.name(path).substringAfterLast('.', "").lowercase(Locale.ROOT) in extensions
 
+    /** 复用文件列表的可见顺序，不为翻页再请求一次目录；目录、其他类型与其他路径不混进来。 */
+    fun gallery(path: String, entries: List<RemoteEntry>): List<String> {
+        val parent = SftpPath.parent(path)
+        val images = entries.filter {
+            (it.type == RemoteFileType.FILE || it.type == RemoteFileType.SYMLINK) &&
+                SftpPath.parent(it.path) == parent && supports(it.path)
+        }.map { it.path }.distinct()
+        // 列表被刷新或缺失时仍能看点开的图片，不能悄悄跳到另一张。
+        return if (path in images) images else listOf(path)
+    }
+
     /** 压缩文件很小也可能解出巨幅位图，所以同时限制最长边和总像素数。 */
     fun sampleSize(width: Int, height: Int): Int {
         require(width > 0 && height > 0)

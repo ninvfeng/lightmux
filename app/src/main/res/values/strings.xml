@@ -228,6 +228,9 @@
     <string name="files_image_preview">Preview image</string>
     <string name="files_image_reset">Fit image to screen</string>
     <string name="files_image_hint">Pinch to zoom · Double-tap to zoom or reset · GIF shows the first frame</string>
+    <string name="files_image_gallery_hint">Swipe for previous or next · Pinch to zoom · GIF shows the first frame</string>
+    <string name="files_image_zoomed_hint">Drag to pan · Double-tap to reset before swiping between images</string>
+    <string name="files_image_position">Image %1$d of %2$d</string>
     <string name="files_image_too_large">This image exceeds the %1$s preview limit. Download it to view.</string>
     <string name="files_image_unsupported">This image is damaged or its format is not supported. Download it to view.</string>
     <string name="files_image_failed">Could not preview this image: %1$s</string>
