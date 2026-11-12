@@ -216,6 +216,8 @@
 
     <!-- 文件页 -->
     <string name="files_bookmarks">常用目录</string>
+    <string name="files_bookmarks_expand">展开常用目录</string>
+    <string name="files_bookmarks_collapse">收起常用目录</string>
     <string name="files_bookmark_add">添加到常用目录</string>
     <string name="files_bookmark_remove">移出常用目录</string>
     <string name="files_image_preview">图片预览</string>

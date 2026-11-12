@@ -13,11 +13,11 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
@@ -43,7 +43,6 @@ import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material3.InputChip
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -77,6 +76,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -321,9 +321,11 @@ private fun FilesContent(
             onToggleBookmark = { vm.toggleBookmark(state.path) },
         )
         if (vm.bookmarks.isNotEmpty()) {
-            BookmarkBar(
+            BookmarkList(
                 paths = vm.bookmarks.sorted(),
                 currentPath = state.path,
+                expanded = vm.bookmarksExpanded,
+                onToggleExpanded = vm::toggleBookmarksExpanded,
                 onGo = vm::goTo,
                 onRemove = vm::toggleBookmark,
             )
@@ -559,35 +561,70 @@ private fun PathBar(
     }
 }
 
-/** 完整路径区分同名目录；点击路径直达，移除入口单独放在末尾。 */
+/** 折叠时只留入口，避免收藏较多时挤占文件浏览；展开状态由共用的 ViewModel 管理。 */
 @Composable
-private fun BookmarkBar(
+private fun BookmarkList(
     paths: List<String>,
     currentPath: String,
+    expanded: Boolean,
+    onToggleExpanded: () -> Unit,
     onGo: (String) -> Unit,
     onRemove: (String) -> Unit,
 ) {
-    LazyRow(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
-    ) {
-        item {
-            Text(stringResource(R.string.files_bookmarks), style = MaterialTheme.typography.labelSmall)
-        }
-        items(paths, key = { it }) { path ->
-            InputChip(
-                selected = path == currentPath,
-                onClick = { onGo(path) },
-                label = { Text(path, maxLines = 1) },
-                trailingIcon = {
-                    IconButton(onClick = { onRemove(path) }, modifier = Modifier.size(28.dp)) {
-                        Icon(Icons.Default.Close, stringResource(R.string.files_bookmark_remove),
-                            modifier = Modifier.size(16.dp))
-                    }
-                },
+    val toggleLabel = stringResource(
+        if (expanded) R.string.files_bookmarks_collapse else R.string.files_bookmarks_expand,
+    )
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth()
+                .clickable(role = Role.Button, onClickLabel = toggleLabel, onClick = onToggleExpanded)
+                .heightIn(min = 48.dp)
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = stringResource(R.string.files_bookmarks),
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.labelLarge,
             )
+            Icon(
+                imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                contentDescription = toggleLabel,
+            )
+        }
+        if (expanded) {
+            // 半屏面板也要留出文件列表的位置，收藏再多也只在这一块内部滚动。
+            LazyColumn(Modifier.fillMaxWidth().heightIn(max = 192.dp)) {
+                items(paths, key = { it }) { path ->
+                    Surface(
+                        color = if (path == currentPath) MaterialTheme.colorScheme.secondaryContainer
+                        else MaterialTheme.colorScheme.surface,
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            // 跳转和移除是相邻的独立目标，移除不能顺带进入该目录。
+                            Text(
+                                text = path,
+                                modifier = Modifier.weight(1f)
+                                    .clickable(role = Role.Button) { onGo(path) }
+                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            IconButton(onClick = { onRemove(path) }) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = stringResource(R.string.files_bookmark_remove),
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

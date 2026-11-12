@@ -55,6 +55,14 @@ class FilesViewModel(
     var bookmarks by mutableStateOf<Set<String>>(emptySet())
         private set
 
+    // 与目录加载状态分开：换目录、返回页面或重开面板都不应重置用户的展开选择。
+    var bookmarksExpanded by mutableStateOf(false)
+        private set
+
+    fun toggleBookmarksExpanded() {
+        bookmarksExpanded = !bookmarksExpanded
+    }
+
     fun toggleBookmark(path: String) {
         viewModelScope.launch {
             try {

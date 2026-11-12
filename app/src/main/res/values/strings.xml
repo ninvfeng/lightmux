@@ -223,6 +223,8 @@
 
     <!-- 文件页 -->
     <string name="files_bookmarks">Favorite folders</string>
+    <string name="files_bookmarks_expand">Expand favorite folders</string>
+    <string name="files_bookmarks_collapse">Collapse favorite folders</string>
     <string name="files_bookmark_add">Add to favorite folders</string>
     <string name="files_bookmark_remove">Remove from favorite folders</string>
     <string name="files_image_preview">Preview image</string>
